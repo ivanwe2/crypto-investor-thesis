@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/TradeEngine.Api/TradeEngine.Api.csproj" Id="839cd77d-1107-4f3c-a485-c7741b60bcb4" />
+  </Folder>
+  <Folder Name="/test/">
+    <Project Path="test/TradeEngine.UnitTests/TradeEngine.UnitTests.csproj" Id="8d995af4-39a4-4b8f-9a7d-ffb33560f1af" />
+  </Folder>
+</Solution>
