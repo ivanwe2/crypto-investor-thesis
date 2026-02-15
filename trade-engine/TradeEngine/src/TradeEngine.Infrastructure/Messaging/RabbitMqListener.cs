@@ -33,68 +33,80 @@ public class RabbitMqListener(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        try
+        // RETRY LOOP: Keep trying to connect until successful or cancelled
+        while (!stoppingToken.IsCancellationRequested)
         {
-            var factory = new ConnectionFactory 
-            { 
-                HostName = _hostName, 
-                Port = _port,
-                UserName = _username,
-                Password = _password,
-            };
-            
-            // 1. Async Connection & Channel Creation
-            _connection = await factory.CreateConnectionAsync(stoppingToken);
-            _channel = await _connection.CreateChannelAsync(cancellationToken: stoppingToken);
-
-            // 2. Async Topology Declaration
-            await _channel.ExchangeDeclareAsync(
-                exchange: MessagingConstants.ExchangeName, 
-                type: ExchangeType.Fanout, 
-                durable: true,
-                cancellationToken: stoppingToken);
-
-            await _channel.QueueDeclareAsync(
-                queue: MessagingConstants.QueueName, 
-                durable: true, 
-                exclusive: false, 
-                autoDelete: false,
-                cancellationToken: stoppingToken);
-
-            await _channel.QueueBindAsync(
-                queue: MessagingConstants.QueueName, 
-                exchange: MessagingConstants.ExchangeName, 
-                routingKey: MessagingConstants.RoutingKey,
-                cancellationToken: stoppingToken);
-
-            logger.LogInformation(".NET Listener connected to RabbitMQ at {Host}:{Port}", _hostName, _port);
-
-            // 3. Async Consumer
-            // We use AsyncEventingBasicConsumer instead of EventingBasicConsumer
-            var consumer = new AsyncEventingBasicConsumer(_channel);
-            
-            consumer.ReceivedAsync += async (model, ea) =>
+            try
             {
-                var body = ea.Body.ToArray();
-                var message = Encoding.UTF8.GetString(body);
+                var factory = new ConnectionFactory 
+                { 
+                    HostName = _hostName, 
+                    Port = _port,
+                    UserName = _username,
+                    Password = _password
+                };
                 
-                await ProcessMessageAsync(message);
-            };
+                // Attempt connection
+                _connection = await factory.CreateConnectionAsync(stoppingToken);
+                _channel = await _connection.CreateChannelAsync(cancellationToken: stoppingToken);
 
-            await _channel.BasicConsumeAsync(
-                queue: MessagingConstants.QueueName, 
-                autoAck: true, 
-                consumer: consumer,
-                cancellationToken: stoppingToken);
+                await _channel.ExchangeDeclareAsync(
+                    exchange: MessagingConstants.ExchangeName, 
+                    type: ExchangeType.Fanout, 
+                    durable: true,
+                    cancellationToken: stoppingToken);
 
-            while (!stoppingToken.IsCancellationRequested)
+                await _channel.QueueDeclareAsync(
+                    queue: MessagingConstants.QueueName, 
+                    durable: true, 
+                    exclusive: false, 
+                    autoDelete: false,
+                    cancellationToken: stoppingToken);
+
+                await _channel.QueueBindAsync(
+                    queue: MessagingConstants.QueueName, 
+                    exchange: MessagingConstants.ExchangeName, 
+                    routingKey: MessagingConstants.RoutingKey,
+                    cancellationToken: stoppingToken);
+
+                logger.LogInformation("✅ .NET Listener connected to RabbitMQ at {Host}:{Port}", _hostName, _port);
+
+                var consumer = new AsyncEventingBasicConsumer(_channel);
+                
+                consumer.ReceivedAsync += async (model, ea) =>
+                {
+                    var body = ea.Body.ToArray();
+                    var message = Encoding.UTF8.GetString(body);
+                    await ProcessMessageAsync(message);
+                };
+
+                await _channel.BasicConsumeAsync(
+                    queue: MessagingConstants.QueueName, 
+                    autoAck: true, 
+                    consumer: consumer,
+                    cancellationToken: stoppingToken);
+
+                break;
+            }
+            catch (Exception ex)
             {
-                await Task.Delay(1000, stoppingToken);
+                // Log warning and wait before retrying
+                logger.LogWarning("⚠️ RabbitMQ not reachable yet. Retrying in 3s... Error: {Message}", ex.Message);
+                try 
+                {
+                    await Task.Delay(3000, stoppingToken);
+                } 
+                catch (OperationCanceledException) 
+                {
+                    // Graceful shutdown
+                    return;
+                }
             }
         }
-        catch (Exception ex)
+
+        while (!stoppingToken.IsCancellationRequested)
         {
-            logger.LogError("Could not connect to RabbitMQ: {Message}", ex.Message);
+            await Task.Delay(1000, stoppingToken);
         }
     }
 
