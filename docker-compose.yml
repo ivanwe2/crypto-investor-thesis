@@ -67,9 +67,14 @@ services:
       postgres:
         condition: service_started
     environment:
+      # Enable 'Information' logs so we can see "Connected"
+      - ASPNETCORE_ENVIRONMENT=Development 
       - ConnectionStrings__DefaultConnection=Host=postgres;Database=trading_db;Username=admin;Password=password
       - RabbitMq__Host=rabbitmq
       - RabbitMq__Port=5672
+      # Pass the credentials so we don't get rejected as 'guest'
+      - RabbitMq__Username=user
+      - RabbitMq__Password=password
 
   # 3. PYTHON AI ANALYST
   ai-analyst:

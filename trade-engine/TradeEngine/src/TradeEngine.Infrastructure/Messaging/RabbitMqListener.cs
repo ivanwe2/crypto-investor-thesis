@@ -21,6 +21,8 @@ public class RabbitMqListener(
     
     private readonly string _hostName = configuration[MessagingConstants.RabbitMqHostConfigKey] ?? MessagingConstants.DefaultHost;
     private readonly int _port = int.Parse(configuration[MessagingConstants.RabbitMqPortConfigKey] ?? MessagingConstants.DefaultPort);
+    private readonly string _username = configuration["RabbitMq:Username"] ?? "guest";
+    private readonly string _password = configuration["RabbitMq:Password"] ?? "guest";
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -30,6 +32,8 @@ public class RabbitMqListener(
             { 
                 HostName = _hostName, 
                 Port = _port,
+                UserName = _username,
+                Password = _password,
             };
             
             // 1. Async Connection & Channel Creation
