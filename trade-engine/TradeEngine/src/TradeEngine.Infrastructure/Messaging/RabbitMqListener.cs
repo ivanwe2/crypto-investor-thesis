@@ -24,6 +24,12 @@ public class RabbitMqListener(
     private readonly string _username = configuration["RabbitMq:Username"] ?? "guest";
     private readonly string _password = configuration["RabbitMq:Password"] ?? "guest";
 
+    private readonly JsonSerializerOptions _jsonOptions = new()
+    {
+        NumberHandling = JsonNumberHandling.AllowReadingFromString,
+        PropertyNameCaseInsensitive = true
+    };
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         try
@@ -95,7 +101,7 @@ public class RabbitMqListener(
     {
         try
         {
-            var trade = JsonSerializer.Deserialize<TradeUpdate>(message);
+            var trade = JsonSerializer.Deserialize<TradeUpdate>(message, _jsonOptions);
 
             if (trade is not null && trade.Data.Price > 0)
             {
