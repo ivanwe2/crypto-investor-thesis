@@ -15,58 +15,76 @@ public class RabbitMqListener(
     IConfiguration configuration) : BackgroundService
 {
     private IConnection? _connection;
-    private IModel? _channel;
+    private IChannel? _channel;
     
     private readonly string _hostName = configuration[MessagingConstants.RabbitMqHostConfigKey] ?? MessagingConstants.DefaultHost;
     private readonly int _port = int.Parse(configuration[MessagingConstants.RabbitMqPortConfigKey] ?? MessagingConstants.DefaultPort);
 
-    protected override Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         try
         {
             var factory = new ConnectionFactory 
             { 
                 HostName = _hostName, 
-                Port = _port 
+                Port = _port,
             };
             
-            _connection = factory.CreateConnection();
-            _channel = _connection.CreateModel();
+            // 1. Async Connection & Channel Creation
+            _connection = await factory.CreateConnectionAsync(stoppingToken);
+            _channel = await _connection.CreateChannelAsync(cancellationToken: stoppingToken);
 
-            _channel.ExchangeDeclare(
+            // 2. Async Topology Declaration
+            await _channel.ExchangeDeclareAsync(
                 exchange: MessagingConstants.ExchangeName, 
                 type: ExchangeType.Fanout, 
-                durable: true);
+                durable: true,
+                cancellationToken: stoppingToken);
 
-            _channel.QueueDeclare(
+            await _channel.QueueDeclareAsync(
                 queue: MessagingConstants.QueueName, 
                 durable: true, 
                 exclusive: false, 
-                autoDelete: false);
+                autoDelete: false,
+                cancellationToken: stoppingToken);
 
-            _channel.QueueBind(
+            await _channel.QueueBindAsync(
                 queue: MessagingConstants.QueueName, 
                 exchange: MessagingConstants.ExchangeName, 
-                routingKey: MessagingConstants.RoutingKey);
+                routingKey: MessagingConstants.RoutingKey,
+                cancellationToken: stoppingToken);
 
-            logger.LogInformation("NET Listener connected to RabbitMQ at {Host}:{Port}", _hostName, _port);
+            logger.LogInformation("✅ .NET Listener connected to RabbitMQ at {Host}:{Port}", _hostName, _port);
 
-            var consumer = new EventingBasicConsumer(_channel);
-            consumer.Received += (model, ea) =>
+            // 3. Async Consumer
+            // We use AsyncEventingBasicConsumer instead of EventingBasicConsumer
+            var consumer = new AsyncEventingBasicConsumer(_channel);
+            
+            consumer.ReceivedAsync += async (model, ea) =>
             {
                 var body = ea.Body.ToArray();
                 var message = Encoding.UTF8.GetString(body);
+                
                 ProcessMessage(message);
+                
+                await Task.CompletedTask;
             };
 
-            _channel.BasicConsume(queue: MessagingConstants.QueueName, autoAck: true, consumer: consumer);
+            await _channel.BasicConsumeAsync(
+                queue: MessagingConstants.QueueName, 
+                autoAck: true, 
+                consumer: consumer,
+                cancellationToken: stoppingToken);
+
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                await Task.Delay(1000, stoppingToken);
+            }
         }
         catch (Exception ex)
         {
             logger.LogError("Could not connect to RabbitMQ: {Message}", ex.Message);
         }
-
-        return Task.CompletedTask;
     }
 
     private void ProcessMessage(string message)
@@ -77,7 +95,7 @@ public class RabbitMqListener(
 
             if (trade is not null && trade.Data.Price > 0)
             {
-                logger.LogInformation("Received: {Symbol} @ ${Price}", trade.Data.Symbol, trade.Data.Price);
+                logger.LogInformation("{Symbol} @ ${Price}", trade.Data.Symbol, trade.Data.Price);
             }
         }
         catch (Exception ex)
@@ -88,8 +106,8 @@ public class RabbitMqListener(
 
     public override void Dispose()
     {
-        _channel?.Close();
-        _connection?.Close();
+        _channel?.Dispose();
+        _connection?.Dispose();
         base.Dispose();
     }
 }

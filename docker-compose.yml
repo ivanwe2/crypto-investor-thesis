@@ -1,13 +1,13 @@
 services:
-  # ------------------------------------------------
-  # MESSAGE BROKER (RabbitMQ)
-  # ------------------------------------------------
+  # ==============================================
+  # INFRASTRUCTURE
+  # ==============================================
   rabbitmq:
     image: rabbitmq:3-management
     container_name: thesis-rabbitmq
     ports:
-      - "5672:5672"   # AMQP protocol (Used by Go/.NET)
-      - "15672:15672" # Management UI (Browser)
+      - "5672:5672"   # App Port
+      - "15672:15672" # Management UI
     environment:
       RABBITMQ_DEFAULT_USER: user
       RABBITMQ_DEFAULT_PASS: password
@@ -17,9 +17,6 @@ services:
       timeout: 5s
       retries: 5
 
-  # ------------------------------------------------
-  # DATABASE (PostgreSQL)
-  # ------------------------------------------------
   postgres:
     image: postgres:17-alpine
     container_name: thesis-postgres
@@ -32,14 +29,59 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-  # ------------------------------------------------
-  # CACHE (Redis)
-  # ------------------------------------------------
   redis:
     image: redis:alpine
     container_name: thesis-redis
     ports:
       - "6379:6379"
+
+  # ==============================================
+  # MICROSERVICES
+  # ==============================================
+  
+  # 1. GO INGESTOR
+  ingestor:
+    build: 
+      context: ./ingestor
+      dockerfile: Dockerfile
+    container_name: thesis-ingestor
+    restart: on-failure
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_URL=amqp://user:password@rabbitmq:5672/
+
+  # 2. .NET TRADE ENGINE
+  trade-engine:
+    build:
+      context: ./trade-engine/TradeEngine
+      dockerfile: Dockerfile
+    container_name: thesis-trade-engine
+    restart: on-failure
+    ports:
+      - "5000:8080" # Maps localhost:5000 -> Container 8080
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_started
+    environment:
+      # Overrides appsettings.json for Docker
+      - ConnectionStrings__DefaultConnection=Host=postgres;Database=trading_db;Username=admin;Password=password
+      - RabbitMq__Host=rabbitmq
+      - RabbitMq__Port=5672
+
+  # 3. PYTHON AI ANALYST
+  ai-analyst:
+    build:
+      context: ./ai-analyst
+      dockerfile: Dockerfile
+    container_name: thesis-ai-analyst
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
 
 volumes:
   postgres_data:
