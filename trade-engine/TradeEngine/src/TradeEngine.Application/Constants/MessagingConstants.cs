@@ -14,4 +14,7 @@ public static class MessagingConstants
     // Defaults
     public const string DefaultHost = "localhost";
     public const string DefaultPort = "5672";
+
+    // SignalR Methods (Frontend Listeners)
+    public const string SignalRReceiveMethod = "ReceivePriceUpdate";
 }

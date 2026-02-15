@@ -7,12 +7,14 @@ using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using TradeEngine.Application.Constants;
 using TradeEngine.Application.DTOs;
+using TradeEngine.Application.Interfaces;
 
 namespace TradeEngine.Infrastructure.Messaging;
 
 public class RabbitMqListener(
     ILogger<RabbitMqListener> logger,
-    IConfiguration configuration) : BackgroundService
+    IConfiguration configuration,
+    IPriceBroadcaster priceBroadcaster) : BackgroundService
 {
     private IConnection? _connection;
     private IChannel? _channel;
@@ -65,9 +67,7 @@ public class RabbitMqListener(
                 var body = ea.Body.ToArray();
                 var message = Encoding.UTF8.GetString(body);
                 
-                ProcessMessage(message);
-                
-                await Task.CompletedTask;
+                await ProcessMessageAsync(message);
             };
 
             await _channel.BasicConsumeAsync(
@@ -87,7 +87,7 @@ public class RabbitMqListener(
         }
     }
 
-    private void ProcessMessage(string message)
+    private async Task ProcessMessageAsync(string message)
     {
         try
         {
@@ -96,6 +96,8 @@ public class RabbitMqListener(
             if (trade is not null && trade.Data.Price > 0)
             {
                 logger.LogInformation("{Symbol} @ ${Price}", trade.Data.Symbol, trade.Data.Price);
+
+                await priceBroadcaster.BroadcastPriceAsync(trade.Data);
             }
         }
         catch (Exception ex)
