@@ -8,6 +8,12 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.2" />
+    <PackageReference Include="RabbitMQ.Client" Version="7.2.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TradeEngine.Application\TradeEngine.Application.csproj" />
+    <ProjectReference Include="..\TradeEngine.Infrastructure\TradeEngine.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>
