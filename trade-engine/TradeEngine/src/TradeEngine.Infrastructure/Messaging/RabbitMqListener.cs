@@ -67,7 +67,7 @@ public class RabbitMqListener(
                 routingKey: MessagingConstants.RoutingKey,
                 cancellationToken: stoppingToken);
 
-            logger.LogInformation("✅ .NET Listener connected to RabbitMQ at {Host}:{Port}", _hostName, _port);
+            logger.LogInformation(".NET Listener connected to RabbitMQ at {Host}:{Port}", _hostName, _port);
 
             // 3. Async Consumer
             // We use AsyncEventingBasicConsumer instead of EventingBasicConsumer
@@ -109,6 +109,10 @@ public class RabbitMqListener(
                 logger.LogInformation("{Symbol} @ ${Price}", trade.Data.Symbol, trade.Data.Price);
 
                 await priceBroadcaster.BroadcastPriceAsync(trade.Data);
+            }
+            else
+            {
+                logger.LogWarning("Received message but Price was 0. Raw JSON: {Raw}", message);
             }
         }
         catch (Exception ex)
