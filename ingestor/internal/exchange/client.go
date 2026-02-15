@@ -12,10 +12,10 @@ import (
 
 const baseURL = "wss://stream.binance.com:9443/stream?streams="
 
-func Connect(symbols []string) {
-	var streamParams []string
-	for _, s := range symbols {
-		streamParams = append(streamParams, fmt.Sprintf("%s@trade", strings.ToLower(s)))
+func Connect(symbols []string, dataChan chan<- CombinedStreamEvent) {
+	streamParams := make([]string, len(symbols))
+	for i, s := range symbols {
+		streamParams[i] = fmt.Sprintf("%s@trade", strings.ToLower(s))
 	}
 	url := baseURL + strings.Join(streamParams, "/")
 
@@ -23,11 +23,11 @@ func Connect(symbols []string) {
 
 	c, _, err := websocket.DefaultDialer.Dial(url, nil)
 	if err != nil {
-		log.Fatal("Error connecting to Binance:", err)
+		log.Fatal("Connection failed:", err)
 	}
 	defer c.Close()
 
-	log.Println("Connected! Listening for trades...")
+	log.Println("Connected! Streaming to channel...")
 
 	for {
 		_, message, err := c.ReadMessage()
@@ -43,8 +43,12 @@ func Connect(symbols []string) {
 			continue
 		}
 
-		trade := event.Data
-		// 4. Print with dynamic symbol
-		log.Printf("💰 %s: $%s (Time: %d)", trade.Symbol, trade.Price, trade.TradeTime)
+		// Non-blocking send: If the channel is full, we drop the message.
+		// This prevents the WebSocket from disconnecting if RabbitMQ gets slow.
+		select {
+		case dataChan <- event:
+		default:
+			log.Println("⚠️ Channel full, dropping message")
+		}
 	}
 }

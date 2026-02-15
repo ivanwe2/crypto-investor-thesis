@@ -1,0 +1,45 @@
+services:
+  # ------------------------------------------------
+  # MESSAGE BROKER (RabbitMQ)
+  # ------------------------------------------------
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: thesis-rabbitmq
+    ports:
+      - "5672:5672"   # AMQP protocol (Used by Go/.NET)
+      - "15672:15672" # Management UI (Browser)
+    environment:
+      RABBITMQ_DEFAULT_USER: user
+      RABBITMQ_DEFAULT_PASS: password
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ------------------------------------------------
+  # DATABASE (PostgreSQL)
+  # ------------------------------------------------
+  postgres:
+    image: postgres:17-alpine
+    container_name: thesis-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: trading_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # ------------------------------------------------
+  # CACHE (Redis)
+  # ------------------------------------------------
+  redis:
+    image: redis:alpine
+    container_name: thesis-redis
+    ports:
+      - "6379:6379"
+
+volumes:
+  postgres_data:
