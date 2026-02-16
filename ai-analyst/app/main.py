@@ -1,59 +1,33 @@
 import uvicorn
 import logging
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from transformers import pipeline
+from app.schemas import AnalysisRequest, SentimentResponse
+from app.services.analyzer import analyzer
 
-# Configure Logging (No Emojis)
+# Configure Logging
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
-app = FastAPI()
-
-# Global variable to hold the model in memory
-sentiment_pipeline = None
-
-class SentimentRequest(BaseModel):
-    text: str
-
-class SentimentResponse(BaseModel):
-    label: str
-    score: float
+app = FastAPI(title="Crypto Thesis AI Analyst", version="1.0.0")
 
 @app.on_event("startup")
-def load_model():
-    global sentiment_pipeline
-    logger.info("Loading AI Model... This may take time on first run.")
-    try:
-        # We use a default distilled model for speed. 
-        # For a thesis, you could swap this for "ProsusAI/finbert" later.
-        sentiment_pipeline = pipeline("sentiment-analysis")
-        logger.info("AI Model loaded successfully.")
-    except Exception as e:
-        logger.error(f"Failed to load AI model: {e}")
+def startup_event():
+    # Load model on startup
+    analyzer.load_model()
 
-@app.get("/")
+@app.get("/health")
 def health_check():
-    return {"status": "AI Analyst Online"}
+    return {"status": "online", "service": "ai-analyst"}
 
-@app.post("/analyze", response_model=SentimentResponse)
-def analyze_sentiment(request: SentimentRequest):
-    if not sentiment_pipeline:
-        raise HTTPException(status_code=503, detail="Model is loading")
-    
+# --- THE FIX IS HERE ---
+@app.post("/api/v1/analyze", response_model=SentimentResponse)
+def analyze_sentiment(payload: AnalysisRequest):
     try:
-        # Run inference
-        results = sentiment_pipeline(request.text)
-        # Result looks like: [{'label': 'POSITIVE', 'score': 0.99}]
-        top_result = results[0]
-        
-        return SentimentResponse(
-            label=top_result['label'],
-            score=top_result['score']
-        )
+        return analyzer.predict(payload.text)
+    except RuntimeError:
+        raise HTTPException(status_code=503, detail="AI Model is not ready yet")
     except Exception as e:
-        logger.error(f"Prediction error: {e}")
-        raise HTTPException(status_code=500, detail="Prediction failed")
+        logging.error(f"Inference error: {e}")
+        raise HTTPException(status_code=500, detail="Internal analysis error")
 
 if __name__ == '__main__':
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
