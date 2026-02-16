@@ -1,6 +1,6 @@
 import logging
 from transformers import pipeline
-from app.schemas import SentimentResponse
+from app.schemas.schemas import SentimentResponse
 
 logger = logging.getLogger(__name__)
 

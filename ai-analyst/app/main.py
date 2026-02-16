@@ -1,7 +1,7 @@
 import uvicorn
 import logging
 from fastapi import FastAPI, HTTPException
-from app.schemas import AnalysisRequest, SentimentResponse
+from app.schemas.schemas import AnalysisRequest, SentimentResponse
 from app.services.analyzer import analyzer
 
 # Configure Logging
@@ -18,7 +18,6 @@ def startup_event():
 def health_check():
     return {"status": "online", "service": "ai-analyst"}
 
-# --- THE FIX IS HERE ---
 @app.post("/api/v1/analyze", response_model=SentimentResponse)
 def analyze_sentiment(payload: AnalysisRequest):
     try:
