@@ -11,9 +11,13 @@ public static class MessagingConstants
     public const string RabbitMqHostConfigKey = "RabbitMq:Host";
     public const string RabbitMqPortConfigKey = "RabbitMq:Port";
     
+    // AI Analyst Configuration Keys
+    public const string AiAnalystUrlConfigKey = "AiAnalyst:BaseUrl";
+    
     // Defaults
     public const string DefaultHost = "localhost";
     public const string DefaultPort = "5672";
+    public const string DefaultAiUrl = "http://ai-analyst:8000"; // Docker default
 
     // SignalR Methods (Frontend Listeners)
     public const string SignalRReceiveMethod = "ReceivePriceUpdate";

@@ -2,6 +2,9 @@ using TradeEngine.Infrastructure.SignalR.Hubs;
 using TradeEngine.Infrastructure.SignalR.Services;
 using TradeEngine.Application.Interfaces;
 using TradeEngine.Infrastructure.Messaging;
+using TradeEngine.Api.Endpoints;
+using TradeEngine.Infrastructure.Services;
+using TradeEngine.Application.Constants;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -12,6 +15,13 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddSignalR();
 
 builder.Services.AddSingleton<IPriceBroadcaster, PriceBroadcaster>();
+builder.Services.AddHttpClient<IAiAnalyst, HttpAiAnalyst>(client =>
+{
+    string aiUrl = builder.Configuration[MessagingConstants.AiAnalystUrlConfigKey] 
+                   ?? MessagingConstants.DefaultAiUrl;
+                   
+    client.BaseAddress = new Uri(aiUrl);
+});
 
 builder.Services.AddHostedService<RabbitMqListener>();
 
@@ -38,6 +48,7 @@ if (app.Environment.IsDevelopment())
 app.UseCors("ReactClient");
 
 app.MapHub<MarketDataHub>("/hubs/market");
+app.MapAnalysisEndpoints();
 
 app.MapGet("/", () => "Trade Engine is Running");
 
