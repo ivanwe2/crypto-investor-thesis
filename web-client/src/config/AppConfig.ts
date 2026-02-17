@@ -11,5 +11,9 @@ export const AppConfig = {
             // The method name the Frontend calls on the Backend
             JoinGroup: 'JoinMarketGroup',
         }
+    },
+
+    Endpoints: {
+        Analysis: '/api/analysis'
     }
 };

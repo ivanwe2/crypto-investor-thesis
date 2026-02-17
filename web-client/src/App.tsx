@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { signalRService } from './services/SignalRService';
 import { useMarketStore } from './hooks/useMarketStore';
+import { SentimentWidget } from './components/SentimentWidget';
 
 const WATCH_LIST = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'];
 
@@ -10,44 +11,43 @@ function App() {
   useEffect(() => {
     const init = async () => {
       await signalRService.startConnection();
-      
-      // Subscribe to all coins in our watch list
-      WATCH_LIST.forEach(symbol => {
-        signalRService.joinGroup(symbol);
-      });
+      WATCH_LIST.forEach(symbol => signalRService.joinGroup(symbol));
     };
-
     init();
   }, []);
 
   return (
-    <div style={{ padding: '2rem', fontFamily: 'Arial, sans-serif' }}>
+    <div style={{ padding: '2rem', fontFamily: 'Arial, sans-serif', maxWidth: '1200px', margin: '0 auto', display: 'flex' }}>
       <h1>Crypto Thesis Dashboard</h1>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem' }}>
+      
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '2rem', alignItems: 'start' }}>
         
-        {WATCH_LIST.map((symbol) => {
-          const ticker = tickers[symbol];
-          
-          if (!ticker) return (
-            <div key={symbol} style={cardStyle}>
-              <h3>{symbol}</h3>
-              <p>Waiting for data...</p>
-            </div>
-          );
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '1rem' }}>
+          {WATCH_LIST.map((symbol) => {
+            const ticker = tickers[symbol];
+            
+            if (!ticker) return (
+              <div key={symbol} style={cardStyle}>
+                <h3>{symbol}</h3>
+                <p>Waiting for data...</p>
+              </div>
+            );
 
-          const color = ticker.trend === 'up' ? 'green' : ticker.trend === 'down' ? 'red' : 'black';
+            const color = ticker.trend === 'up' ? 'green' : ticker.trend === 'down' ? 'red' : 'black';
 
-          return (
-            <div key={symbol} style={cardStyle}>
-              <h3>{symbol}</h3>
-              <h2 style={{ color, margin: '10px 0' }}>
-                ${ticker.price.toFixed(2)}
-              </h2>
-              <small>Last Update: {new Date(ticker.timestamp).toLocaleTimeString()}</small>
-            </div>
-          );
-        })}
+            return (
+              <div key={symbol} style={cardStyle}>
+                <h3>{symbol}</h3>
+                <h2 style={{ color, margin: '10px 0' }}>
+                  ${ticker.price.toFixed(2)}
+                </h2>
+                <small>Last: {new Date(ticker.timestamp).toLocaleTimeString()}</small>
+              </div>
+            );
+          })}
+        </div>
 
+        <SentimentWidget />
       </div>
     </div>
   );
