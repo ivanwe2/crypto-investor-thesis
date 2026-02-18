@@ -1,16 +1,23 @@
-using TradeEngine.Infrastructure.SignalR.Hubs;
-using TradeEngine.Infrastructure.SignalR.Services;
+using Serilog;
+using TradeEngine.Api.Endpoints;
+using TradeEngine.Api.Middleware.ExceptionHandling;
+using TradeEngine.Application.Constants;
 using TradeEngine.Application.Interfaces;
 using TradeEngine.Infrastructure.Messaging;
-using TradeEngine.Api.Endpoints;
 using TradeEngine.Infrastructure.Services;
-using TradeEngine.Application.Constants;
+using TradeEngine.Infrastructure.SignalR.Hubs;
+using TradeEngine.Infrastructure.SignalR.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+builder.Host.UseSerilog((context, configuration) =>
+    configuration.ReadFrom.Configuration(context.Configuration));
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+builder.Services.AddProblemDetails();
 
 builder.Services.AddSignalR();
 
@@ -29,16 +36,17 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("ReactClient", policy =>
     {
-        policy.WithOrigins("http://localhost:3000") // The Vite Frontend URL
+        policy.WithOrigins("http://localhost:3000")
               .AllowAnyHeader()
               .AllowAnyMethod()
-              .AllowCredentials(); // Required for SignalR
+              .AllowCredentials();
     });
 });
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+app.UseExceptionHandler();
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
