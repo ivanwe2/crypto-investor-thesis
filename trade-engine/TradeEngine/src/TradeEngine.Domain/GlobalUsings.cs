@@ -1,1 +1,1 @@
-﻿
+﻿global using TradeEngine.Domain.Shared;
