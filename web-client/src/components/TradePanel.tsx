@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { orderService } from "../services/orderService";
 import { useAuthStore } from "../store/authStore";
+import { useWalletStore } from "../store/walletStore";
 
 interface TradePanelProps {
   symbol: string;
@@ -9,6 +10,8 @@ interface TradePanelProps {
 
 export const TradePanel = ({ symbol, currentPrice }: TradePanelProps) => {
   const { isAuthenticated } = useAuthStore();
+  const { fetchWallet } = useWalletStore();
+
   const [side, setSide] = useState<1 | 2>(1); // 1 = Buy, 2 = Sell
   const [quantity, setQuantity] = useState<number>(0.05);
   const [targetPrice, setTargetPrice] = useState<number>(currentPrice);
@@ -54,6 +57,9 @@ export const TradePanel = ({ symbol, currentPrice }: TradePanelProps) => {
         text: response.message || "Order placed successfully!",
         isError: false,
       });
+
+      // 3. ✨ AUTOMATICALLY UPDATE THE WALLET! ✨
+      await fetchWallet();
     } catch (err: any) {
       setMessage({
         text: err.response?.data || "Failed to place order.",

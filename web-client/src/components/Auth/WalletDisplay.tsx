@@ -1,28 +1,20 @@
-import { useState, useEffect, useCallback } from "react";
-import { walletService } from "../../services/walletService";
+import { useEffect } from "react";
 import { useAuthStore } from "../../store/authStore";
-import type { WalletResponse } from "../../dtos/WalletDtos";
+import { useWalletStore } from "../../store/walletStore";
 
 export const WalletDisplay = () => {
   const { username, logout } = useAuthStore();
-  const [wallet, setWallet] = useState<WalletResponse | null>(null);
-  const [loading, setLoading] = useState(false);
 
-  const fetchWallet = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await walletService.getMyWallet();
-      setWallet(data);
-    } catch (err) {
-      console.error("Failed to fetch wallet", err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const { wallet, isLoading, fetchWallet, clearWallet } = useWalletStore();
 
   useEffect(() => {
     fetchWallet();
   }, [fetchWallet]);
+
+  const handleLogout = () => {
+    clearWallet();
+    logout();
+  };
 
   return (
     <div>
@@ -33,7 +25,7 @@ export const WalletDisplay = () => {
 
       <div style={walletBoxStyle}>
         <h4>💰 Your Wallet</h4>
-        {loading && !wallet ? (
+        {isLoading && !wallet ? (
           <p>Loading balances...</p>
         ) : wallet && wallet.balances.length > 0 ? (
           wallet.balances.map((b) => (
@@ -59,13 +51,13 @@ export const WalletDisplay = () => {
         <button
           onClick={fetchWallet}
           style={refreshButtonStyle}
-          disabled={loading}
+          disabled={isLoading}
         >
-          {loading ? "↻ Refreshing..." : "↻ Refresh"}
+          {isLoading ? "↻ Refreshing..." : "↻ Refresh"}
         </button>
       </div>
 
-      <button onClick={logout} style={logoutButtonStyle}>
+      <button onClick={handleLogout} style={logoutButtonStyle}>
         Log Out
       </button>
     </div>
