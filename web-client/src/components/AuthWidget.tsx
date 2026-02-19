@@ -94,7 +94,8 @@ const widgetStyle: React.CSSProperties = {
     borderRadius: '8px',
     padding: '1.5rem',
     backgroundColor: '#fff',
-    height: 'fit-content'
+    height: 'fit-content',
+    color: 'black'
 };
 
 const inputStyle: React.CSSProperties = {

@@ -33,7 +33,8 @@ public static class ServiceCollectionExtensions
         });
 
         services.AddScoped<IOrderService, OrderService>();
-        
+        services.AddScoped<IWalletService, WalletService>();
+
         return services;
     }
 

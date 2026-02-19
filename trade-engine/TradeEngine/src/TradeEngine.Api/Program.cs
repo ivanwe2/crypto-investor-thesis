@@ -32,9 +32,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapHub<MarketDataHub>("/hubs/market");
-app.MapAnalysisEndpoints();
-app.MapAuthEndpoints();
-app.MapOrderEndpoints();
+app.MapAllEndpoints();
 
 app.MapGet("/", () => "Trade Engine is Running");
 
