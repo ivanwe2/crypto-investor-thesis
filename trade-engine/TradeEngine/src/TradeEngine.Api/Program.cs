@@ -1,16 +1,8 @@
-using Microsoft.EntityFrameworkCore;
 using Serilog;
 using TradeEngine.Api.Endpoints;
 using TradeEngine.Api.Extensions;
-using TradeEngine.Api.Middleware.ExceptionHandling;
-using TradeEngine.Application.Constants;
-using TradeEngine.Application.Interfaces;
 using TradeEngine.Infrastructure.Extensions;
-using TradeEngine.Infrastructure.Messaging;
-using TradeEngine.Infrastructure.Persistence;
-using TradeEngine.Infrastructure.Services;
 using TradeEngine.Infrastructure.SignalR.Hubs;
-using TradeEngine.Infrastructure.SignalR.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -41,6 +33,7 @@ app.UseAuthorization();
 
 app.MapHub<MarketDataHub>("/hubs/market");
 app.MapAnalysisEndpoints();
+app.MapAuthEndpoints();
 
 app.MapGet("/", () => "Trade Engine is Running");
 

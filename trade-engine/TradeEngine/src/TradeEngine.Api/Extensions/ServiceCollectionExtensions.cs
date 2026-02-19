@@ -66,6 +66,8 @@ public static class ServiceCollectionExtensions
             });
         });
 
+        services.AddScoped<IAuthService, AuthService>();
+
         return services;
     }
 
