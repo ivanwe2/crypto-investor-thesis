@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using TradeEngine.Api.Middleware.ExceptionHandling;
+using TradeEngine.Api.Services;
 using TradeEngine.Application.Constants;
 using TradeEngine.Application.Interfaces;
 using TradeEngine.Infrastructure.Messaging;
@@ -31,6 +32,8 @@ public static class ServiceCollectionExtensions
             client.BaseAddress = new Uri(aiUrl);
         });
 
+        services.AddScoped<IOrderService, OrderService>();
+        
         return services;
     }
 
@@ -81,6 +84,9 @@ public static class ServiceCollectionExtensions
 
         services.AddExceptionHandler<GlobalExceptionHandler>();
         services.AddProblemDetails();
+
+        services.AddHttpContextAccessor();
+        services.AddScoped<ICurrentUserService, CurrentUserService>();
 
         return services;
     }
