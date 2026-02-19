@@ -1,8 +1,9 @@
 import { useEffect } from "react";
+import { signalRService } from "./services/signalRService";
 import { useMarketStore } from "./store/marketStore";
 import { SentimentWidget } from "./components/SentimentWidget";
 import { AuthWidget } from "./components/AuthWidget";
-import { signalRService } from "./services/signalRService";
+import { TradePanel } from "./components/TradePanel";
 
 const WATCH_LIST = ["BTCUSDT", "ETHUSDT", "SOLUSDT"];
 
@@ -24,11 +25,11 @@ function App() {
         fontFamily: "Arial, sans-serif",
         maxWidth: "1200px",
         margin: "0 auto",
-        display: "flex",
       }}
     >
       <h1>Crypto Thesis Dashboard</h1>
 
+      {/* Grid Layout: Prices on Left, AI & Auth on Right */}
       <div
         style={{
           display: "grid",
@@ -37,10 +38,11 @@ function App() {
           alignItems: "start",
         }}
       >
+        {/* Left Column: Price Cards */}
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
+            gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
             gap: "1rem",
           }}
         >
@@ -64,20 +66,37 @@ function App() {
 
             return (
               <div key={symbol} style={cardStyle}>
-                <h3>{symbol}</h3>
-                <h2 style={{ color, margin: "10px 0" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
+                  <h3 style={{ margin: 0 }}>{symbol}</h3>
+                  <small style={{ color: "#888" }}>
+                    {new Date(ticker.timestamp).toLocaleTimeString()}
+                  </small>
+                </div>
+
+                <h2 style={{ color, margin: "15px 0 5px 0" }}>
                   ${ticker.price.toFixed(2)}
                 </h2>
-                <small>
-                  Last: {new Date(ticker.timestamp).toLocaleTimeString()}
-                </small>
+
+                {/* The new Trade Panel injection */}
+                <TradePanel symbol={symbol} currentPrice={ticker.price} />
               </div>
             );
           })}
         </div>
 
-        <AuthWidget />
-        <SentimentWidget />
+        {/* Right Column: Auth & AI Widgets */}
+        <div
+          style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}
+        >
+          <AuthWidget />
+          <SentimentWidget />
+        </div>
       </div>
     </div>
   );
@@ -87,9 +106,11 @@ const cardStyle: React.CSSProperties = {
   border: "1px solid #ddd",
   borderRadius: "8px",
   padding: "1.5rem",
-  boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+  boxShadow: "0 4px 6px rgba(0,0,0,0.05)",
   backgroundColor: "#fff",
-  color: "black",
+  display: "flex",
+  flexDirection: "column",
+  color: "black"
 };
 
 export default App;
