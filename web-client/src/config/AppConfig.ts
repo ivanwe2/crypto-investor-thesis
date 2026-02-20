@@ -14,6 +14,6 @@ export const AppConfig = {
     },
 
     Endpoints: {
-        Analysis: '/api/analysis'
+        Analysis: '/api/v1/analysis'
     }
 };

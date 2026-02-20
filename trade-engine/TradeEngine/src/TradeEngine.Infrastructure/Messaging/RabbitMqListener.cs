@@ -20,10 +20,10 @@ public class RabbitMqListener(
     private IConnection? _connection;
     private IChannel? _channel;
     
-    private readonly string _hostName = configuration[MessagingConstants.RabbitMqHostConfigKey] ?? MessagingConstants.DefaultHost;
-    private readonly int _port = int.Parse(configuration[MessagingConstants.RabbitMqPortConfigKey] ?? MessagingConstants.DefaultPort);
-    private readonly string _username = configuration["RabbitMq:Username"] ?? "guest";
-    private readonly string _password = configuration["RabbitMq:Password"] ?? "guest";
+    private readonly string _hostName = configuration[RabbitMqConstants.HostConfigKey] ?? RabbitMqConstants.DefaultHost;
+    private readonly int _port = int.Parse(configuration[RabbitMqConstants.PortConfigKey] ?? RabbitMqConstants.DefaultPort);
+    private readonly string _username = configuration[RabbitMqConstants.UsernameConfigKey] ?? RabbitMqConstants.DefaultUsername;
+    private readonly string _password = configuration[RabbitMqConstants.PasswordConfigKey] ?? RabbitMqConstants.DefaultPassword;
 
     private readonly JsonSerializerOptions _jsonOptions = new()
     {
@@ -51,25 +51,25 @@ public class RabbitMqListener(
                 _channel = await _connection.CreateChannelAsync(cancellationToken: stoppingToken);
 
                 await _channel.ExchangeDeclareAsync(
-                    exchange: MessagingConstants.ExchangeName, 
+                    exchange: RabbitMqConstants.ExchangeName, 
                     type: ExchangeType.Fanout, 
                     durable: true,
                     cancellationToken: stoppingToken);
 
                 await _channel.QueueDeclareAsync(
-                    queue: MessagingConstants.QueueName, 
+                    queue: RabbitMqConstants.QueueName, 
                     durable: true, 
                     exclusive: false, 
                     autoDelete: false,
                     cancellationToken: stoppingToken);
 
                 await _channel.QueueBindAsync(
-                    queue: MessagingConstants.QueueName, 
-                    exchange: MessagingConstants.ExchangeName, 
-                    routingKey: MessagingConstants.RoutingKey,
+                    queue: RabbitMqConstants.QueueName, 
+                    exchange: RabbitMqConstants.ExchangeName, 
+                    routingKey: RabbitMqConstants.RoutingKey,
                     cancellationToken: stoppingToken);
 
-                logger.LogInformation("✅ .NET Listener connected to RabbitMQ at {Host}:{Port}", _hostName, _port);
+                logger.LogInformation(".NET Listener connected to RabbitMQ at {Host}:{Port}", _hostName, _port);
 
                 var consumer = new AsyncEventingBasicConsumer(_channel);
                 
@@ -81,7 +81,7 @@ public class RabbitMqListener(
                 };
 
                 await _channel.BasicConsumeAsync(
-                    queue: MessagingConstants.QueueName, 
+                    queue: RabbitMqConstants.QueueName, 
                     autoAck: true, 
                     consumer: consumer,
                     cancellationToken: stoppingToken);

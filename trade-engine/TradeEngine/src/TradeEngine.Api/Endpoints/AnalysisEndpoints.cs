@@ -9,7 +9,7 @@ public static class AnalysisEndpoints
 {
     public static void MapAnalysisEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/analysis")
+        var group = app.MapGroup("/analysis")
                        .WithTags("AI Analysis");
 
         group.MapPost("/", AnalyzeText)
