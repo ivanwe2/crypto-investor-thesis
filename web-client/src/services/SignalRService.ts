@@ -1,11 +1,10 @@
 import * as signalR from '@microsoft/signalr';
-import { useMarketStore } from '../hooks/useMarketStore';
+import { useMarketStore } from '../store/marketStore';
 import { AppConfig } from '../config/AppConfig';
 
 class SignalRService {
     private connection: signalR.HubConnection | null = null;
     
-    // Construct the full URL: http://localhost:5000/hubs/market
     private readonly hubUrl = `${AppConfig.ApiBaseUrl}${AppConfig.SignalR.HubPath}`;
 
     public async startConnection(): Promise<void> {
@@ -17,7 +16,6 @@ class SignalRService {
             .withAutomaticReconnect()
             .build();
 
-        // Listen for the specific event defined in Config
         this.connection.on(AppConfig.SignalR.Events.ReceivePriceUpdate, (data: any) => {
             useMarketStore.getState().updateTicker(data);
         });

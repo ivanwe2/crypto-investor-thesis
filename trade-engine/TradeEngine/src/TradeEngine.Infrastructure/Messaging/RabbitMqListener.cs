@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using TradeEngine.Application.Constants;
-using TradeEngine.Application.DTOs;
+using TradeEngine.Application.DTOs.Trade;
 using TradeEngine.Application.Interfaces;
 
 namespace TradeEngine.Infrastructure.Messaging;

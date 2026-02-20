@@ -1,4 +1,4 @@
-namespace TradeEngine.Application.DTOs;
+namespace TradeEngine.Application.DTOs.Trade;
 
 public record TradeUpdate(
     [property: JsonPropertyName("stream")] string Stream,

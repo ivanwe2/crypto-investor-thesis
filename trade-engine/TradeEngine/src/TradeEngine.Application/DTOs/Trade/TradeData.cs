@@ -1,4 +1,4 @@
-namespace TradeEngine.Application.DTOs;
+namespace TradeEngine.Application.DTOs.Trade;
 
 public readonly record struct TradeData(
     [property: JsonPropertyName("s")] string Symbol,

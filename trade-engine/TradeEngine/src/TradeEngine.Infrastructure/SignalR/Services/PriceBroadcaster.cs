@@ -1,8 +1,8 @@
 using Microsoft.AspNetCore.SignalR;
 using TradeEngine.Infrastructure.SignalR.Hubs;
 using TradeEngine.Application.Constants;
-using TradeEngine.Application.DTOs;
 using TradeEngine.Application.Interfaces;
+using TradeEngine.Application.DTOs.Trade;
 
 namespace TradeEngine.Infrastructure.SignalR.Services;
 
