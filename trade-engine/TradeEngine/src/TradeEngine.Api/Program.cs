@@ -1,54 +1,38 @@
-using TradeEngine.Infrastructure.SignalR.Hubs;
-using TradeEngine.Infrastructure.SignalR.Services;
-using TradeEngine.Application.Interfaces;
-using TradeEngine.Infrastructure.Messaging;
+using Serilog;
 using TradeEngine.Api.Endpoints;
-using TradeEngine.Infrastructure.Services;
-using TradeEngine.Application.Constants;
+using TradeEngine.Api.Extensions;
+using TradeEngine.Infrastructure.Extensions;
+using TradeEngine.Infrastructure.SignalR.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Host.UseSerilog((context, configuration) =>
+    configuration.ReadFrom.Configuration(context.Configuration));
 
-builder.Services.AddSignalR();
-
-builder.Services.AddSingleton<IPriceBroadcaster, PriceBroadcaster>();
-builder.Services.AddHttpClient<IAiAnalyst, HttpAiAnalyst>(client =>
-{
-    string aiUrl = builder.Configuration[MessagingConstants.AiAnalystUrlConfigKey] 
-                   ?? MessagingConstants.DefaultAiUrl;
-                   
-    client.BaseAddress = new Uri(aiUrl);
-});
-
-builder.Services.AddHostedService<RabbitMqListener>();
-
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("ReactClient", policy =>
-    {
-        policy.WithOrigins("http://localhost:3000") // The Vite Frontend URL
-              .AllowAnyHeader()
-              .AllowAnyMethod()
-              .AllowCredentials(); // Required for SignalR
-    });
-});
+builder.Services.AddPresentationServices();
+builder.Services.AddInfrastructureServices(builder.Configuration);
+builder.Services.AddSecurityServices(builder.Configuration);
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+app.UseExceptionHandler();
+
+await app.ApplyMigrationsAsync();
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
 
+app.UseSerilogRequestLogging();
 app.UseCors("ReactClient");
 
+app.UseAuthentication();
+app.UseAuthorization();
+
 app.MapHub<MarketDataHub>("/hubs/market");
-app.MapAnalysisEndpoints();
+app.MapAllEndpoints();
 
 app.MapGet("/", () => "Trade Engine is Running");
 
