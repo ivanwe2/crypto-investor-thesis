@@ -39,6 +39,7 @@ public static class ServiceCollectionExtensions
 
         services.AddScoped<IOrderService, OrderService>();
         services.AddScoped<IWalletService, WalletService>();
+        services.AddScoped<IMatchingEngine, MatchingEngine>();
 
         return services;
     }
@@ -99,7 +100,8 @@ public static class ServiceCollectionExtensions
         });
 
         services.AddSignalR();
-        services.AddSingleton<IPriceBroadcaster, PriceBroadcaster>();
+        services.AddSingleton<IPriceBroadcaster, SignalRPriceBroadcaster>();
+        services.AddSingleton<ITradeNotifier, SignalRTradeNotifier>();
 
         services.AddExceptionHandler<GlobalExceptionHandler>();
         services.AddProblemDetails();
