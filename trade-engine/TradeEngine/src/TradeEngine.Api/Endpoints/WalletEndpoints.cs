@@ -8,7 +8,7 @@ public static class WalletEndpoints
 {
     public static void MapWalletEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/wallets")
+        var group = app.MapGroup("/wallets")
                        .WithTags("Wallets")
                        .RequireAuthorization();
 

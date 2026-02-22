@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
+﻿using Asp.Versioning;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
@@ -27,9 +28,13 @@ public static class ServiceCollectionExtensions
 
         services.AddHttpClient<IAiAnalyst, HttpAiAnalyst>(client =>
         {
-            string aiUrl = configuration[MessagingConstants.AiAnalystUrlConfigKey]
-                           ?? MessagingConstants.DefaultAiUrl;
+            string aiUrl = configuration[AiAnalystConstants.UrlConfigKey] 
+                           ?? AiAnalystConstants.DefaultUrl;
             client.BaseAddress = new Uri(aiUrl);
+
+            string apiKey = configuration[AiAnalystConstants.ApiKeyConfigKey]
+                            ?? AiAnalystConstants.DefaultApiKey;
+            client.DefaultRequestHeaders.Add("X-API-Key", apiKey);
         });
 
         services.AddScoped<IOrderService, OrderService>();
@@ -80,6 +85,19 @@ public static class ServiceCollectionExtensions
         services.AddEndpointsApiExplorer();
         services.AddSwaggerGen();
 
+        services.AddApiVersioning(options =>
+        {
+            options.DefaultApiVersion = new ApiVersion(1);
+            options.AssumeDefaultVersionWhenUnspecified = true;
+            options.ReportApiVersions = true;
+            options.ApiVersionReader = new UrlSegmentApiVersionReader();
+        }).AddApiExplorer(options =>
+        {
+            // Format the version as "'v'major[.minor]" (e.g., v1)
+            options.GroupNameFormat = "'v'V";
+            options.SubstituteApiVersionInUrl = true;
+        });
+
         services.AddSignalR();
         services.AddSingleton<IPriceBroadcaster, PriceBroadcaster>();
 
@@ -88,6 +106,9 @@ public static class ServiceCollectionExtensions
 
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUserService, CurrentUserService>();
+
+        services.AddHealthChecks()
+                .AddDbContextCheck<TradeEngineDbContext>();
 
         return services;
     }

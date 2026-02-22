@@ -9,7 +9,7 @@ public static class OrderEndpoints
 {
     public static void MapOrderEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/orders")
+        var group = app.MapGroup("/orders")
                        .WithTags("Orders")
                        .RequireAuthorization();
 
