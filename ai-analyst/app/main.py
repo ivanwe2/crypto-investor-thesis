@@ -3,7 +3,7 @@ import uvicorn
 import logging
 from fastapi import FastAPI, Depends, HTTPException, Security, status
 from fastapi.security.api_key import APIKeyHeader
-from app.schemas import AnalysisRequest, SentimentResponse
+from app.schemas.schemas import AnalysisRequest, SentimentResponse
 from app.services.analyzer import analyzer
 
 logging.basicConfig(level=logging.INFO)
