@@ -10,14 +10,15 @@ using RabbitMQ.Client.Events;
 using TradeEngine.Application.Constants;
 using TradeEngine.Application.DTOs.Trade;
 using TradeEngine.Application.Interfaces;
+using TradeEngine.Infrastructure.Services;
 
-namespace TradeEngine.Infrastructure.Messaging;
+namespace TradeEngine.Infrastructure.BackgroundServices.Messaging;
 
 public class RabbitMqListener(
     ILogger<RabbitMqListener> logger,
     IConfiguration configuration,
     IPriceBroadcaster priceBroadcaster,
-    IServiceScopeFactory serviceScopeFactory) : BackgroundService
+    IMarketStateCache marketStateCache) : BackgroundService
 {
     private IConnection? _connection;
     private IChannel? _channel;
@@ -124,9 +125,7 @@ public class RabbitMqListener(
 
                 await priceBroadcaster.BroadcastPriceAsync(trade.Data);
 
-                using var scope = serviceScopeFactory.CreateScope();
-                var matchingEngine = scope.ServiceProvider.GetRequiredService<IMatchingEngine>();
-                await matchingEngine.ProcessTickAsync(trade.Data);
+                marketStateCache.UpdatePrice(trade.Data.Symbol, trade.Data.Price);
             }
             else
             {
