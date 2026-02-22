@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.SignalR;
 using TradeEngine.Infrastructure.SignalR.Hubs;
 using TradeEngine.Application.Interfaces;
+using TradeEngine.Application.Constants;
 
 namespace TradeEngine.Infrastructure.SignalR.Services;
 
@@ -11,6 +12,8 @@ public class SignalRTradeNotifier(IHubContext<MarketDataHub> hubContext) : ITrad
         // SignalR automatically maps the JWT 'sub' claim to the User Identifier.
         // This ensures ONLY the user who placed the trade receives the notification!
         await hubContext.Clients.User(userId.ToString())
-            .SendAsync("OrderFilled", new { Symbol = symbol, Quantity = quantity, Price = price });
+            .SendAsync(
+            SignalRConstants.OrderFilledMethod,
+            new { symbol, quantity, price });
     }
 }

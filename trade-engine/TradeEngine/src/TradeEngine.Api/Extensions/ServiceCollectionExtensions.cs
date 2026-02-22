@@ -1,5 +1,6 @@
 ﻿using Asp.Versioning;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
@@ -10,6 +11,7 @@ using TradeEngine.Application.Interfaces;
 using TradeEngine.Infrastructure.Messaging;
 using TradeEngine.Infrastructure.Persistence;
 using TradeEngine.Infrastructure.Services;
+using TradeEngine.Infrastructure.SignalR.Providers;
 using TradeEngine.Infrastructure.SignalR.Services;
 
 namespace TradeEngine.Api.Extensions;
@@ -117,6 +119,7 @@ public static class ServiceCollectionExtensions
         services.AddSignalR();
         services.AddSingleton<IPriceBroadcaster, SignalRPriceBroadcaster>();
         services.AddSingleton<ITradeNotifier, SignalRTradeNotifier>();
+        services.AddSingleton<IUserIdProvider, CustomUserIdProvider>();
 
         services.AddExceptionHandler<GlobalExceptionHandler>();
         services.AddProblemDetails();
