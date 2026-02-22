@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using TradeEngine.Application.DTOs.Trade;
 using TradeEngine.Application.Interfaces;
+using TradeEngine.Domain.Entities;
 using TradeEngine.Domain.Enums;
 using TradeEngine.Infrastructure.Persistence;
 
@@ -22,15 +23,15 @@ public class MatchingEngine(
 
         if (matchingOrders.Count == 0) return;
 
+        var successfullyFilledOrders = new List<Order>();
+
         foreach (var order in matchingOrders)
         {
+            // 2. Mark order as Filled
             var fillResult = order.Fill(tick.Price);
-            if (fillResult.IsFailure)
-            {
-                logger.LogWarning("[WARN] Failed to fill order {OrderId}: {Error}", order.Id, fillResult.Error.Name);
-                continue;
-            }
+            if (fillResult.IsFailure) continue;
 
+            // 3. Load Wallet and distribute funds
             var wallet = await dbContext.Wallets
                 .Include(w => w.Balances)
                 .SingleOrDefaultAsync(w => w.UserId == order.UserId, cancellationToken);
@@ -42,35 +43,45 @@ public class MatchingEngine(
 
             if (order.Side == OrderSide.Buy)
             {
-                // When they placed the buy order, we locked (TargetPrice * Quantity) of Quote currency.
-                // If it executed at a better (lower) price, refund the difference.
                 decimal lockedQuote = order.Quantity * order.TargetPrice;
                 decimal actualCost = order.Quantity * tick.Price;
                 decimal refundQuote = lockedQuote - actualCost;
 
-                if (refundQuote > 0)
-                {
-                    wallet.Deposit(quoteCurrency, refundQuote);
-                }
-                
-                // Give them the asset they bought
+                if (refundQuote > 0) wallet.Deposit(quoteCurrency, refundQuote);
                 wallet.Deposit(baseCurrency, order.Quantity);
             }
             else
             {
-                // Sell Order: They previously locked the Base asset. We give them the Quote revenue.
                 decimal revenueQuote = order.Quantity * tick.Price;
                 wallet.Deposit(quoteCurrency, revenueQuote);
             }
 
-            logger.LogInformation("[INFO] Order {OrderId} Executed! {Side} {Quantity} {Symbol} @ {Price}", 
-                order.Id, order.Side, order.Quantity, order.Symbol, tick.Price);
-
-            // 4. Notify the user instantly
-            await tradeNotifier.NotifyOrderFilledAsync(order.UserId, order.Symbol, order.Quantity, tick.Price);
+            successfullyFilledOrders.Add(order);
         }
 
-        // 5. Commit all changes transactionally
-        await dbContext.SaveChangesAsync(cancellationToken);
+        if (successfullyFilledOrders.Count == 0) return;
+
+        try
+        {
+            // 4. Commit all changes transactionally
+            await dbContext.SaveChangesAsync(cancellationToken);
+
+            // 5. ✨ CRITICAL: ONLY notify the user AFTER the database transaction succeeds!
+            foreach (var order in successfullyFilledOrders)
+            {
+                logger.LogInformation("[INFO] Order {OrderId} Executed! {Side} {Quantity} {Symbol} @ {Price}", 
+                    order.Id, order.Side, order.Quantity, order.Symbol, tick.Price);
+
+                await tradeNotifier.NotifyOrderFilledAsync(order.UserId, order.Symbol, order.Quantity, tick.Price);
+            }
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            logger.LogDebug("[DEBUG] Concurrency conflict avoided. Order was already processed by another tick.");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "[ERROR] An unexpected error occurred while saving the matching order.");
+        }
     }
 }

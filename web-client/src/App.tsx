@@ -5,10 +5,12 @@ import { SentimentWidget } from "./components/SentimentWidget";
 import { AuthWidget } from "./components/AuthWidget";
 import { TradePanel } from "./components/TradePanel";
 import { ToastContainer } from "./components/toast/ToastContainer";
+import { useAuthStore } from "./store/authStore";
 
 const WATCH_LIST = ["BTCUSDT", "ETHUSDT", "SOLUSDT"];
 
 function App() {
+  const token = useAuthStore((state) => state.token);
   const tickers = useMarketStore((state) => state.tickers);
 
   useEffect(() => {
@@ -17,7 +19,7 @@ function App() {
       WATCH_LIST.forEach((symbol) => signalRService.joinGroup(symbol));
     };
     init();
-  }, []);
+  }, [token]);
 
   return (
     <div
