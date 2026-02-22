@@ -11,6 +11,6 @@ public class PriceBroadcaster(IHubContext<MarketDataHub> hubContext) : IPriceBro
     public async Task BroadcastPriceAsync(TradeData tradeData)
     {
         await hubContext.Clients.Group(tradeData.Symbol.ToUpper())
-            .SendAsync(MessagingConstants.SignalRReceiveMethod, tradeData);
+            .SendAsync(SignalRConstants.ReceivePriceUpdateMethod, tradeData);
     }
 }
