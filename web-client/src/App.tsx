@@ -4,6 +4,7 @@ import { useMarketStore } from "./store/marketStore";
 import { SentimentWidget } from "./components/SentimentWidget";
 import { AuthWidget } from "./components/AuthWidget";
 import { TradePanel } from "./components/TradePanel";
+import { ToastContainer } from "./components/toast/ToastContainer";
 
 const WATCH_LIST = ["BTCUSDT", "ETHUSDT", "SOLUSDT"];
 
@@ -96,6 +97,7 @@ function App() {
         >
           <AuthWidget />
           <SentimentWidget />
+          <ToastContainer />
         </div>
       </div>
     </div>

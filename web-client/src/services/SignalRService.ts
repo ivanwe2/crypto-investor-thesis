@@ -1,6 +1,8 @@
 import * as signalR from '@microsoft/signalr';
 import { useMarketStore } from '../store/marketStore';
 import { AppConfig } from '../config/AppConfig';
+import { useNotificationStore } from '../store/notificationStore';
+import { useWalletStore } from '../store/walletStore';
 
 class SignalRService {
     private connection: signalR.HubConnection | null = null;
@@ -18,6 +20,19 @@ class SignalRService {
 
         this.connection.on(AppConfig.SignalR.Events.ReceivePriceUpdate, (data: any) => {
             useMarketStore.getState().updateTicker(data);
+        });
+
+        this.connection.on(AppConfig.SignalR.Events.ReceivePriceUpdate, (data: any) => {
+            useMarketStore.getState().updateTicker(data);
+        });
+
+        this.connection.on(AppConfig.SignalR.Events.OrderFilled, (data: { symbol: string, quantity: number, price: number }) => {
+            console.log("Order Filled Event Received:", data);
+            
+            const message = `Order Executed! Bought ${data.quantity} ${data.symbol} at $${data.price.toLocaleString()}`;
+            useNotificationStore.getState().addNotification(message, 'success');
+
+            useWalletStore.getState().fetchWallet();
         });
 
         try {
