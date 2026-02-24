@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using RabbitMQ.Client;
@@ -9,13 +10,15 @@ using RabbitMQ.Client.Events;
 using TradeEngine.Application.Constants;
 using TradeEngine.Application.DTOs.Trade;
 using TradeEngine.Application.Interfaces;
+using TradeEngine.Infrastructure.Services;
 
-namespace TradeEngine.Infrastructure.Messaging;
+namespace TradeEngine.Infrastructure.BackgroundServices.Messaging;
 
 public class RabbitMqListener(
     ILogger<RabbitMqListener> logger,
     IConfiguration configuration,
-    IPriceBroadcaster priceBroadcaster) : BackgroundService
+    IPriceBroadcaster priceBroadcaster,
+    IMarketStateCache marketStateCache) : BackgroundService
 {
     private IConnection? _connection;
     private IChannel? _channel;
@@ -91,7 +94,7 @@ public class RabbitMqListener(
             catch (Exception ex)
             {
                 // Log warning and wait before retrying
-                logger.LogWarning("⚠️ RabbitMQ not reachable yet. Retrying in 3s... Error: {Message}", ex.Message);
+                logger.LogWarning("RabbitMQ not reachable yet. Retrying in 3s... Error: {Message}", ex.Message);
                 try 
                 {
                     await Task.Delay(3000, stoppingToken);
@@ -118,9 +121,11 @@ public class RabbitMqListener(
 
             if (trade is not null && trade.Data.Price > 0)
             {
-                logger.LogInformation("{Symbol} @ ${Price}", trade.Data.Symbol, trade.Data.Price);
+                logger.LogDebug("{Symbol} @ ${Price}", trade.Data.Symbol, trade.Data.Price);
 
                 await priceBroadcaster.BroadcastPriceAsync(trade.Data);
+
+                marketStateCache.UpdatePrice(trade.Data.Symbol, trade.Data.Price);
             }
             else
             {

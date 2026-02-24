@@ -6,7 +6,7 @@ using TradeEngine.Application.DTOs.Trade;
 
 namespace TradeEngine.Infrastructure.SignalR.Services;
 
-public class PriceBroadcaster(IHubContext<MarketDataHub> hubContext) : IPriceBroadcaster
+public class SignalRPriceBroadcaster(IHubContext<MarketDataHub> hubContext) : IPriceBroadcaster
 {
     public async Task BroadcastPriceAsync(TradeData tradeData)
     {

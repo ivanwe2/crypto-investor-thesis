@@ -1,5 +1,6 @@
 ﻿using Asp.Versioning;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
@@ -7,9 +8,13 @@ using TradeEngine.Api.Middleware.ExceptionHandling;
 using TradeEngine.Api.Services;
 using TradeEngine.Application.Constants;
 using TradeEngine.Application.Interfaces;
-using TradeEngine.Infrastructure.Messaging;
+using TradeEngine.Infrastructure.BackgroundServices.Messaging;
+using TradeEngine.Infrastructure.BackgroundServices.OrderMatching;
+using TradeEngine.Infrastructure.BackgroundServices.TradeSettlement;
 using TradeEngine.Infrastructure.Persistence;
 using TradeEngine.Infrastructure.Services;
+using TradeEngine.Infrastructure.Services.TradeSettlement;
+using TradeEngine.Infrastructure.SignalR.Providers;
 using TradeEngine.Infrastructure.SignalR.Services;
 
 namespace TradeEngine.Api.Extensions;
@@ -19,12 +24,17 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddInfrastructureServices(this IServiceCollection services, IConfiguration configuration)
     {
         var connectionString = configuration.GetConnectionString("DefaultConnection");
-        services.AddDbContext<TradeEngineDbContext>(options =>
+        services.AddDbContextPool<TradeEngineDbContext>(options =>
         {
             options.UseNpgsql(connectionString);
-        });
+        }, poolSize: 1024);
 
+        services.AddMemoryCache();
+        services.AddSingleton<IMarketStateCache, MarketStateCache>();
+        services.AddSingleton<SettlementQueue>();
         services.AddHostedService<RabbitMqListener>();
+        services.AddHostedService<OrderMatchingWorker>();
+        services.AddHostedService<TradeSettlementWorker>();
 
         services.AddHttpClient<IAiAnalyst, HttpAiAnalyst>(client =>
         {
@@ -59,6 +69,21 @@ public static class ServiceCollectionExtensions
                     ValidIssuer = JwtConstants.Issuer,
                     ValidAudience = JwtConstants.Audience,
                     IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret))
+                };
+
+                options.Events = new JwtBearerEvents
+                {
+                    OnMessageReceived = context =>
+                    {
+                        var accessToken = context.Request.Query["access_token"];
+                        var path = context.HttpContext.Request.Path;
+                        
+                        if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
+                        {
+                            context.Token = accessToken;
+                        }
+                        return Task.CompletedTask;
+                    }
                 };
             });
 
@@ -99,7 +124,9 @@ public static class ServiceCollectionExtensions
         });
 
         services.AddSignalR();
-        services.AddSingleton<IPriceBroadcaster, PriceBroadcaster>();
+        services.AddSingleton<IPriceBroadcaster, SignalRPriceBroadcaster>();
+        services.AddSingleton<ITradeNotifier, SignalRTradeNotifier>();
+        services.AddSingleton<IUserIdProvider, CustomUserIdProvider>();
 
         services.AddExceptionHandler<GlobalExceptionHandler>();
         services.AddProblemDetails();
