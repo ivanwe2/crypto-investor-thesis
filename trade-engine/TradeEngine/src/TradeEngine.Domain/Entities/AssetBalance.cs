@@ -17,6 +17,6 @@ public class AssetBalance
         Amount = 0;
     }
 
-    internal void Add(decimal quantity) => Amount += quantity;
+    public void Add(decimal quantity) => Amount += quantity;
     internal void Subtract(decimal quantity) => Amount -= quantity;
 }
