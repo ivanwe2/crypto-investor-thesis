@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { signalRService } from "./services/signalRService";
+import { signalRService } from "./services/customSignalRService";
 import { useMarketStore } from "./store/marketStore";
 import { SentimentWidget } from "./components/SentimentWidget";
 import { AuthWidget } from "./components/AuthWidget";
