@@ -79,6 +79,9 @@ services:
       - RabbitMq__Port=5672
       - RabbitMq__Username=user
       - RabbitMq__Password=password
+      - Otlp__Endpoint=http://otel-collector:4317
+      - Otlp__ServiceName=thesis-trade-engine
+      - Otlp__ServiceVersion=v0.4.0
     networks:
       - thesis-network
 

@@ -3,6 +3,9 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 using System.Text;
 using TradeEngine.Api.Middleware.ExceptionHandling;
 using TradeEngine.Api.Services;
@@ -136,6 +139,49 @@ public static class ServiceCollectionExtensions
 
         services.AddHealthChecks()
                 .AddDbContextCheck<TradeEngineDbContext>();
+
+        return services;
+    }
+
+    public static IServiceCollection AddObservabilityServices(this IServiceCollection services, IConfiguration configuration)
+    {
+        var otlpEndpoint = configuration[ObservabilityConstants.OtlpEndpointConfigKey] 
+                           ?? ObservabilityConstants.DefaultOtlpEndpoint;
+                           
+        var serviceName = configuration[ObservabilityConstants.ServiceNameConfigKey] 
+                           ?? ObservabilityConstants.ServiceName;
+                           
+        var serviceVersion = configuration[ObservabilityConstants.ServiceVersionConfigKey] 
+                             ?? ObservabilityConstants.ServiceVersion;
+
+        services.AddOpenTelemetry()
+            .ConfigureResource(resource => resource.AddService(
+                serviceName: serviceName,
+                serviceVersion: serviceVersion))
+            .WithTracing(tracing =>
+            {
+                tracing
+                    .AddSource("Microsoft.AspNetCore") 
+                    .AddSource("System.Net.Http")      
+                    .AddSource("Npgsql")
+                    .AddEntityFrameworkCoreInstrumentation()
+                    .AddOtlpExporter(options =>
+                    {
+                        options.Endpoint = new Uri(otlpEndpoint);
+                    });
+            })
+            .WithMetrics(metrics =>
+            {
+                metrics
+                    .AddMeter("Microsoft.AspNetCore.Hosting")
+                    .AddMeter("Microsoft.AspNetCore.Server.Kestrel")
+                    .AddMeter("System.Net.Http")
+                    .AddRuntimeInstrumentation()
+                    .AddOtlpExporter(options =>
+                    {
+                        options.Endpoint = new Uri(otlpEndpoint);
+                    });
+            });
 
         return services;
     }
