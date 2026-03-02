@@ -1,113 +1,181 @@
-import { useEffect } from "react";
-import { 
-  Card, 
-  CardHeader, 
-  Text, 
-  Badge, 
-  tokens 
+import { useEffect, useState } from "react";
+import {
+  Card,
+  CardHeader,
+  Text,
+  Badge,
+  Input,
+  Button,
+  tokens,
 } from "@fluentui/react-components";
+import { Dismiss16Regular, Add16Regular } from "@fluentui/react-icons";
 import { signalRService } from "../../../shared/services/signalRService";
 import { useMarketStore } from "../store/marketStore";
 import { useAuthStore } from "../../auth/store/authStore";
+import { useWatchlistStore } from "../store/watchlistStore";
 
 import styles from "./Dashboard.module.scss";
-
-import { SentimentWidget } from "../../../features/ai/components/SentimentWidget";
-import { AuthWidget } from "../../../features/auth/components/AuthWidget";
-import { TradePanel } from "../../../features/trading/components/TradePanel";
+import { AuthWidget } from "../../auth/components/AuthWidget";
+import { SentimentWidget } from "../../ai/components/SentimentWidget";
+import { TradePanel } from "../../trading/components/TradePanel";
 import { ToastContainer } from "../../../shared/components/toast/ToastContainer";
-
-const WATCH_LIST = ["BTCUSDT", "ETHUSDT", "SOLUSDT"];
 
 export const Dashboard = () => {
   const token = useAuthStore((state) => state.token);
   const tickers = useMarketStore((state) => state.tickers);
+  const { symbols: watchList, addSymbol, removeSymbol } = useWatchlistStore();
+  const [newSymbol, setNewSymbol] = useState("");
 
   useEffect(() => {
     const init = async () => {
       await signalRService.startConnection();
-      WATCH_LIST.forEach((symbol) => signalRService.joinGroup(symbol));
+      watchList.forEach((symbol) => signalRService.joinGroup(symbol));
     };
     init();
-  }, [token]);
+  }, [token, watchList]);
 
   return (
     <div className={styles.dashboardContainer}>
       <header className={styles.header}>
         <Text size={800} weight="semibold" as="h1">
-          Trading Terminal
-        </Text>
-        <Text size={300} style={{ color: tokens.colorNeutralForeground3 }}>
-          Distributed Crypto Trading System v0.4
+          Market Overview
         </Text>
       </header>
 
       <div className={styles.grid}>
-        {/* Left Column: Price Cards */}
-        <div className={styles.tickerGrid}>
-          {WATCH_LIST.map((symbol) => {
-            const ticker = tickers[symbol];
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          {/* ✨ ADD SYMBOL WIDGET ✨ */}
+          <Card
+            style={{ backgroundColor: tokens.colorNeutralBackground1Hover }}
+          >
+            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+              <Input
+                value={newSymbol}
+                onChange={(_, d) => setNewSymbol(d.value)}
+                placeholder="Add symbol (e.g. ADAUSDT)"
+                style={{ flex: 1 }}
+              />
+              <Button
+                icon={<Add16Regular />}
+                appearance="primary"
+                onClick={() => {
+                  addSymbol(newSymbol);
+                  setNewSymbol("");
+                }}
+              >
+                Add Coin
+              </Button>
+            </div>
+          </Card>
 
-            if (!ticker) {
-              return (
-                <Card key={symbol} style={{ minHeight: '160px', justifyContent: 'center', alignItems: 'center' }}>
-                  <Text size={400} weight="semibold">{symbol}</Text>
-                  <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>Connecting to stream...</Text>
-                </Card>
-              );
-            }
+          <div className={styles.tickerGrid}>
+            {watchList.map((symbol) => {
+              const ticker = tickers[symbol];
 
-            const isUp = ticker.trend === "up";
-            const isDown = ticker.trend === "down";
-            
-            const badgeColor = isUp ? "success" : isDown ? "danger" : "informative";
-            const trendArrow = isUp ? "▲" : isDown ? "▼" : "−";
-
-            return (
-              <Card key={symbol} style={{ backgroundColor: tokens.colorNeutralBackground1Hover }}>
-                <CardHeader
-                  header={<Text weight="semibold" size={400}>{symbol}</Text>}
-                  description={
-                    <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                      {new Date(ticker.timestamp).toLocaleTimeString()}
+              if (!ticker) {
+                return (
+                  <Card
+                    key={symbol}
+                    style={{
+                      minHeight: "160px",
+                      justifyContent: "center",
+                      alignItems: "center",
+                    }}
+                  >
+                    <CardHeader
+                      action={
+                        <Button
+                          icon={<Dismiss16Regular />}
+                          appearance="transparent"
+                          onClick={() => removeSymbol(symbol)}
+                        />
+                      }
+                    />
+                    <Text size={400} weight="semibold">
+                      {symbol}
                     </Text>
-                  }
-                  action={
-                    <Badge appearance="tint" color={badgeColor}>
-                      {trendArrow} {ticker.trend.toUpperCase()}
-                    </Badge>
-                  }
-                />
-                
-                <Text 
-                  size={800} 
-                  weight="bold" 
-                  style={{ 
-                    color: isUp ? tokens.colorPaletteGreenForeground1 : isDown ? tokens.colorPaletteRedForeground1 : tokens.colorNeutralForeground1,
-                    margin: '12px 0'
+                    <Text
+                      size={200}
+                      style={{ color: tokens.colorNeutralForeground3 }}
+                    >
+                      Waiting for data...
+                    </Text>
+                  </Card>
+                );
+              }
+
+              const isUp = ticker.trend === "up";
+              const isDown = ticker.trend === "down";
+
+              return (
+                <Card
+                  key={symbol}
+                  style={{
+                    backgroundColor: tokens.colorNeutralBackground1Hover,
                   }}
                 >
-                  ${ticker.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
-                </Text>
-
-                {/* The Trade Panel injection */}
-                <TradePanel symbol={symbol} currentPrice={ticker.price} />
-              </Card>
-            );
-          })}
+                  <CardHeader
+                    header={
+                      <Text weight="semibold" size={400}>
+                        {symbol}
+                      </Text>
+                    }
+                    description={
+                      <Text
+                        size={200}
+                        style={{ color: tokens.colorNeutralForeground3 }}
+                      >
+                        {new Date(ticker.timestamp).toLocaleTimeString()}
+                      </Text>
+                    }
+                    action={
+                      <div style={{ display: "flex", gap: "4px" }}>
+                        <Badge
+                          appearance="tint"
+                          size="medium"
+                          shape="rounded"
+                          color={
+                            isUp ? "success" : isDown ? "danger" : "informative"
+                          }
+                        >
+                          {isUp ? "▲" : isDown ? "▼" : "−"}{" "}
+                          {ticker.trend.toUpperCase()}
+                        </Badge>
+                        <Button
+                          icon={<Dismiss16Regular />}
+                          appearance="transparent"
+                          onClick={() => removeSymbol(symbol)}
+                        />
+                      </div>
+                    }
+                  />
+                  <Text
+                    size={800}
+                    weight="bold"
+                    style={{
+                      color: isUp
+                        ? tokens.colorPaletteGreenForeground1
+                        : isDown
+                          ? tokens.colorPaletteRedForeground1
+                          : tokens.colorNeutralForeground1,
+                    }}
+                  >
+                    $
+                    {ticker.price.toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 4,
+                    })}
+                  </Text>
+                  <TradePanel symbol={symbol} currentPrice={ticker.price} />
+                </Card>
+              );
+            })}
+          </div>
         </div>
 
-        {/* Right Column: Auth & AI Widgets */}
         <div className={styles.sidebar}>
-          {/* Wrapping your old widgets in Fluent UI Cards to make them match! */}
-          <Card>
-            <AuthWidget />
-          </Card>
-          
-          <Card>
-            <SentimentWidget />
-          </Card>
-          
+          <AuthWidget />
+          <SentimentWidget />
           <ToastContainer />
         </div>
       </div>
