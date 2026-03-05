@@ -13,6 +13,7 @@ using TradeEngine.Application.Constants;
 using TradeEngine.Application.Interfaces;
 using TradeEngine.Infrastructure.BackgroundServices.Messaging;
 using TradeEngine.Infrastructure.BackgroundServices.OrderMatching;
+using TradeEngine.Infrastructure.BackgroundServices.OutboxProcessor;
 using TradeEngine.Infrastructure.BackgroundServices.TradeSettlement;
 using TradeEngine.Infrastructure.Persistence;
 using TradeEngine.Infrastructure.Services;
@@ -38,6 +39,7 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<RabbitMqListener>();
         services.AddHostedService<OrderMatchingWorker>();
         services.AddHostedService<TradeSettlementWorker>();
+        services.AddHostedService<OutboxProcessorWorker>();
 
         services.AddHttpClient<IAiAnalyst, HttpAiAnalyst>(client =>
         {

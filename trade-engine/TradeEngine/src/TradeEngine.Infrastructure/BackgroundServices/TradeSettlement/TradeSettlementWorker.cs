@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -90,6 +91,29 @@ public class TradeSettlementWorker(
 
                 await UpsertBalanceAsync(quoteCurrency, quoteAmountChange);
                 await UpsertBalanceAsync(baseCurrency, baseAmountChange);
+
+                var tradeSettledEvent = new
+                {
+                    OrderId = order.Id,
+                    UserId = order.UserId,
+                    Symbol = order.Symbol,
+                    Side = order.Side.ToString(),
+                    Quantity = order.Quantity,
+                    Price = command.ExecutionPrice,
+                    Timestamp = DateTime.UtcNow
+                };
+
+                var outboxMessage = new TradeOutboxMessage
+                {
+                    Id = Guid.NewGuid(),
+                    Type = "TradeSettled",
+                    Content = JsonSerializer.Serialize(tradeSettledEvent),
+                    OccurredOnUtc = DateTime.UtcNow
+                };
+
+                db.Set<TradeOutboxMessage>().Add(outboxMessage);
+                
+                await db.SaveChangesAsync(stoppingToken);
 
                 // Commit the entire unit of work securely
                 await transaction.CommitAsync(stoppingToken);
