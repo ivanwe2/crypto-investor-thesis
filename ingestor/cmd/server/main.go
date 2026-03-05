@@ -6,11 +6,15 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
+	"ingestor/internal/analytics"
+	"ingestor/internal/cache"
 	"ingestor/internal/config"
 	"ingestor/internal/exchange"
+	"ingestor/internal/grpc"
 	"ingestor/internal/health"
 	"ingestor/internal/messaging"
 	"ingestor/internal/telemetry"
@@ -22,17 +26,13 @@ import (
 func main() {
 	log.Println("[INFO] Crypto Ingestor Starting...")
 
-	// 1. Load Configuration
 	cfg := config.Load()
 
-	// ✨ 2. Initialize OpenTelemetry
-	// We point this to the OTEL Collector container port 4317
 	otelShutdown, err := telemetry.InitProvider("TradeIngestor", "otel-collector:4317")
 	if err != nil {
 		log.Fatalf("[FATAL] Failed to initialize OpenTelemetry: %v", err)
 	}
 
-	// 3. Initialize RabbitMQ
 	publisher, err := messaging.NewRabbitMQClient(cfg.RabbitMQURL)
 	if err != nil {
 		log.Fatalf("[FATAL] Failed to connect to RabbitMQ: %v", err)
@@ -40,7 +40,12 @@ func main() {
 	defer publisher.Close()
 	log.Println("[INFO] RabbitMQ Publisher Ready")
 
-	// 4. Setup and Start Health Check Server
+	// ✨ Initialize our new high-performance memory structures
+	marketCache := cache.NewMarketCache()
+	volTracker := analytics.NewVolatilityTracker()
+
+	go grpc.StartServer(":50051", marketCache)
+
 	httpServer := health.NewServer(cfg.HealthPort)
 	go func() {
 		log.Printf("[INFO] Health check server listening on %s/healthz\n", cfg.HealthPort)
@@ -49,40 +54,48 @@ func main() {
 		}
 	}()
 
-	// 5. Setup Data Channel & Start Ingestion
 	tradesChan := make(chan exchange.CombinedStreamEvent, 100)
 	go exchange.Connect(cfg.Symbols, tradesChan)
 
-	// 6. Setup Graceful Shutdown Listener
 	stopChan := make(chan os.Signal, 1)
 	signal.Notify(stopChan, os.Interrupt, syscall.SIGTERM)
 
-	log.Println("[INFO] Forwarding trades to RabbitMQ...")
+	log.Println("[INFO] Forwarding trades to RabbitMQ and updating Cache...")
 
-	// 7. Main Event Loop
 	for {
 		select {
 		case trade := <-tradesChan:
-			// ✨ START THE DISTRIBUTED TRACE ✨
-			// We create a root span here. This is the exact moment the trade enters our system.
 			tr := otel.Tracer("ingestor")
 			ctx, span := tr.Start(context.Background(), "Ingest Binance Trade")
 
-			// Add useful metadata to the trace so you can search for it in Grafana
 			span.SetAttributes(
 				attribute.String("crypto.symbol", trade.Data.Symbol),
 				attribute.String("crypto.price", trade.Data.Price),
 			)
 
-			// ✨ Pass the trace context into the publisher
+			// ✨ Parse price and update Intelligence/Cache layers
+			priceFloat, parseErr := strconv.ParseFloat(trade.Data.Price, 64)
+			if parseErr == nil {
+				// 1. Calculate running volatility
+				volatility := volTracker.ProcessTick(trade.Data.Symbol, priceFloat)
+
+				// 2. Safely write to our RWMutex cache
+				marketCache.UpdatePrice(trade.Data.Symbol, priceFloat, volatility)
+
+				// (Optional) Log highly volatile moments!
+				if volatility > 5.0 {
+					log.Printf("[ALERT] High volatility detected on %s: %.2f", trade.Data.Symbol, volatility)
+				}
+			} else {
+				log.Printf("[WARN] Failed to parse price for %s: %v", trade.Data.Symbol, parseErr)
+			}
+
+			// Pass the trace context into the publisher
 			err := publisher.Publish(ctx, trade)
 			if err != nil {
 				log.Printf("[ERROR] Failed to publish: %v", err)
-			} else {
-				log.Printf("[DEBUG] Sent -> %s: %s", trade.Data.Symbol, trade.Data.Price)
 			}
 
-			// End the span
 			span.End()
 
 		case sig := <-stopChan:
@@ -95,7 +108,6 @@ func main() {
 				log.Printf("[WARN] HTTP server shutdown error: %v", err)
 			}
 
-			// ✨ Flush all remaining traces before exiting
 			if err := otelShutdown(ctx); err != nil {
 				log.Printf("[WARN] OTEL shutdown error: %v", err)
 			}
