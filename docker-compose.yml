@@ -16,6 +16,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - thesis-network
 
   postgres:
     image: postgres:17-alpine
@@ -28,18 +30,21 @@ services:
       POSTGRES_DB: trading_db
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - thesis-network
 
   redis:
     image: redis:alpine
     container_name: thesis-redis
     ports:
       - "6379:6379"
+    networks:
+      - thesis-network
 
   # ==============================================
   # MICROSERVICES
   # ==============================================
   
-  # 1. GO INGESTOR
   ingestor:
     build: 
       context: ./ingestor
@@ -51,8 +56,9 @@ services:
         condition: service_healthy
     environment:
       - RABBITMQ_URL=amqp://user:password@rabbitmq:5672/
+    networks:
+      - thesis-network
 
-  # 2. .NET TRADE ENGINE
   trade-engine:
     build:
       context: ./trade-engine/TradeEngine
@@ -67,16 +73,18 @@ services:
       postgres:
         condition: service_started
     environment:
-      # Enable 'Information' logs so we can see "Connected"
       - ASPNETCORE_ENVIRONMENT=Development 
       - ConnectionStrings__DefaultConnection=Host=postgres;Database=trading_db;Username=admin;Password=password
       - RabbitMq__Host=rabbitmq
       - RabbitMq__Port=5672
-      # Pass the credentials so we don't get rejected as 'guest'
       - RabbitMq__Username=user
       - RabbitMq__Password=password
+      - Otlp__Endpoint=http://otel-collector:4317
+      - Otlp__ServiceName=thesis-trade-engine
+      - Otlp__ServiceVersion=v0.4.0
+    networks:
+      - thesis-network
 
-  # 3. PYTHON AI ANALYST
   ai-analyst:
     build:
       context: ./ai-analyst
@@ -86,17 +94,87 @@ services:
       - "8000:8000"
     environment:
       - PORT=8000
+    networks:
+      - thesis-network
 
-  # 4. REACT WEB CLIENT (NEW)
   web-client:
     build:
       context: ./web-client
       dockerfile: Dockerfile
     container_name: thesis-web-client
     ports:
-      - "3000:80" # Maps localhost:3000 -> Container Nginx Port 80
+      - "3000:80" 
     depends_on:
       - trade-engine
+    networks:
+      - thesis-network
+
+  # ==========================================
+  # Observability Stack (v0.4)
+  # ==========================================
+  
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.96.0
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./infra/observability/otel-collector-config.yaml:/etc/otel-collector-config.yaml
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    networks:
+      - thesis-network
+
+  prometheus:
+    image: prom/prometheus:latest
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --enable-feature=exemplar-storage
+    volumes:
+      - ./infra/observability/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    networks:
+      - thesis-network
+
+  tempo:
+    image: grafana/tempo:2.4.1
+    command: [ "-config.file=/etc/tempo.yaml" ]
+    volumes:
+      - ./infra/observability/tempo.yaml:/etc/tempo.yaml
+    ports:
+      - "3200:3200"
+      - "4317"
+    networks:
+      - thesis-network
+
+  loki:
+    image: grafana/loki:2.9.0
+    container_name: loki
+    ports:
+      - "3100:3100"
+    networks:
+      - thesis-network
+
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+    volumes:
+      - ./infra/observability/grafana/datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml
+    ports:
+      - "3001:3000" # Changed from 3000 to 3001 to avoid React conflict
+    depends_on:
+      - prometheus
+      - tempo
+      - loki
+    networks:
+      - thesis-network
+
+networks:
+  thesis-network:
+    driver: bridge
 
 volumes:
   postgres_data:
