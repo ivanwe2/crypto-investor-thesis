@@ -161,6 +161,7 @@ public static class ServiceCollectionExtensions
             .WithTracing(tracing =>
             {
                 tracing
+                    .AddSource("TradeEngine")
                     .AddSource("Microsoft.AspNetCore") 
                     .AddSource("System.Net.Http")      
                     .AddSource("Npgsql")

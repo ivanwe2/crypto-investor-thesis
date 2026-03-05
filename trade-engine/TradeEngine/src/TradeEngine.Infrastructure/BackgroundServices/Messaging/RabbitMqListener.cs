@@ -11,6 +11,9 @@ using TradeEngine.Application.Constants;
 using TradeEngine.Application.DTOs.Trade;
 using TradeEngine.Application.Interfaces;
 using TradeEngine.Infrastructure.Services;
+using OpenTelemetry;
+using OpenTelemetry.Context.Propagation;
+using System.Diagnostics;
 
 namespace TradeEngine.Infrastructure.BackgroundServices.Messaging;
 
@@ -27,6 +30,8 @@ public class RabbitMqListener(
     private readonly int _port = int.Parse(configuration[RabbitMqConstants.PortConfigKey] ?? RabbitMqConstants.DefaultPort);
     private readonly string _username = configuration[RabbitMqConstants.UsernameConfigKey] ?? RabbitMqConstants.DefaultUsername;
     private readonly string _password = configuration[RabbitMqConstants.PasswordConfigKey] ?? RabbitMqConstants.DefaultPassword;
+
+    private static readonly ActivitySource ActivitySource = new("TradeEngine");
 
     private readonly JsonSerializerOptions _jsonOptions = new()
     {
@@ -78,8 +83,28 @@ public class RabbitMqListener(
                 
                 consumer.ReceivedAsync += async (model, ea) =>
                 {
+                    var parentContext = Propagators.DefaultTextMapPropagator.Extract(default, ea.BasicProperties.Headers, (headers, key) =>
+                    {
+                        if (headers != null && headers.TryGetValue(key, out var value))
+                        {
+                            // RabbitMQ serializes header strings as byte arrays
+                            if (value is byte[] bytes)
+                            {
+                                return [Encoding.UTF8.GetString(bytes)];
+                            }
+                            return [value?.ToString() ?? string.Empty];
+                        }
+                        return [];
+                    });
+
+                    using var activity = ActivitySource.StartActivity("Process RabbitMQ Trade", ActivityKind.Consumer, parentContext.ActivityContext);
+                    
+                    activity?.SetTag("messaging.system", "rabbitmq");
+                    activity?.SetTag("messaging.operation", "receive");
+
                     var body = ea.Body.ToArray();
                     var message = Encoding.UTF8.GetString(body);
+                    
                     await ProcessMessageAsync(message);
                 };
 
