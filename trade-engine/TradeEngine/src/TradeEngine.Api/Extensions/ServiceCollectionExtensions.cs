@@ -17,6 +17,7 @@ using TradeEngine.Infrastructure.BackgroundServices.OutboxProcessor;
 using TradeEngine.Infrastructure.BackgroundServices.TradeSettlement;
 using TradeEngine.Infrastructure.Persistence;
 using TradeEngine.Infrastructure.Services;
+using TradeEngine.Infrastructure.Services.Messaging;
 using TradeEngine.Infrastructure.Services.TradeSettlement;
 using TradeEngine.Infrastructure.SignalR.Providers;
 using TradeEngine.Infrastructure.SignalR.Services;
@@ -36,6 +37,7 @@ public static class ServiceCollectionExtensions
         services.AddMemoryCache();
         services.AddSingleton<IMarketStateCache, MarketStateCache>();
         services.AddSingleton<SettlementQueue>();
+        services.AddSingleton<IMessagePublisher, RabbitMqPublisher>();
         services.AddHostedService<RabbitMqListener>();
         services.AddHostedService<OrderMatchingWorker>();
         services.AddHostedService<TradeSettlementWorker>();

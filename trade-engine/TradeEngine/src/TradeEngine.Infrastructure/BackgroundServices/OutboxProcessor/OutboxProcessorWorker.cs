@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using TradeEngine.Application.Interfaces;
 
 namespace TradeEngine.Infrastructure.BackgroundServices.OutboxProcessor;
 
@@ -20,6 +21,7 @@ public class OutboxProcessorWorker(
                 using var scope = serviceProvider.CreateScope();
                 
                 var dbContext = scope.ServiceProvider.GetRequiredService<Persistence.TradeEngineDbContext>();
+                var publisher = scope.ServiceProvider.GetRequiredService<IMessagePublisher>();
                 
                 var messages = await dbContext.TradeOutboxMessages
                     .Where(m => m.ProcessedOnUtc == null)
@@ -35,8 +37,9 @@ public class OutboxProcessorWorker(
                     {
                         try
                         {
+                            await publisher.PublishAsync(message.Type, message.Content, stoppingToken);
+                            
                             message.ProcessedOnUtc = DateTime.UtcNow;
-                            logger.LogDebug("Published outbox message {Id}", message.Id);
                         }
                         catch (Exception ex)
                         {
@@ -53,7 +56,7 @@ public class OutboxProcessorWorker(
                 logger.LogError(ex, "An error occurred while processing outbox messages.");
             }
 
-            await Task.Delay(5000, stoppingToken);
+            await Task.Delay(3000, stoppingToken);
         }
     }
 }
