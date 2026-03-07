@@ -94,8 +94,11 @@ services:
       - "8000:8000"
     environment:
       - PORT=8000
+      - RABBITMQ_URL=amqp://user:password@rabbitmq:5672/
     networks:
       - thesis-network
+    depends_on:
+      - rabbitmq
 
   web-client:
     build:
