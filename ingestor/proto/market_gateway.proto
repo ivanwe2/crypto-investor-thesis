@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+package marketgateway.v1;
+
+// This tells the Go compiler where to put the generated code
+option go_package = "ingestor/gen/marketgateway/v1";
+
+// The core gRPC service our Go app will serve
+service MarketDataService {
+  // Unary: Gets a single snapshot instantly from the Go RWMutex Cache
+  rpc GetMarketSnapshot(SnapshotRequest) returns (MarketSnapshot);
+
+  // Server-streaming: Maintains a persistent open connection (faster than RabbitMQ!)
+  rpc StreamMarketData(StreamRequest) returns (stream MarketSnapshot);
+
+  // Unary: AI/Matching engine checks this before allowing a trade
+  rpc GetVolatilityScore(VolatilityRequest) returns (VolatilityResponse);
+}
+
+// --- Requests ---
+message SnapshotRequest {
+  string symbol = 1;
+}
+
+message StreamRequest {
+  repeated string symbols = 1; // Allows subscribing to multiple coins
+}
+
+message VolatilityRequest {
+  string symbol = 1;
+}
+
+// --- Responses ---
+message MarketSnapshot {
+  string symbol        = 1;
+  double price         = 2;
+  double volatility    = 3;
+  int64  timestamp_utc = 4;
+}
+
+message VolatilityResponse {
+  string symbol     = 1;
+  double volatility = 2;
+  string regime     = 3; // "LOW", "NORMAL", "HIGH"
+}

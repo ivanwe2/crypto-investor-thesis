@@ -94,8 +94,13 @@ services:
       - "8000:8000"
     environment:
       - PORT=8000
+      - RABBITMQ_URL=amqp://user:password@rabbitmq:5672/
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
     networks:
       - thesis-network
+    depends_on:
+      - rabbitmq
+      - otel-collector
 
   web-client:
     build:
