@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"sync"
 	"syscall"
 	"time"
 
@@ -21,6 +22,12 @@ import (
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+)
+
+// ✨ NEW: Debouncer state to prevent log spam
+var (
+	lastAlertTime = make(map[string]time.Time)
+	alertMutex    sync.Mutex
 )
 
 func main() {
@@ -54,7 +61,7 @@ func main() {
 		}
 	}()
 
-	tradesChan := make(chan exchange.CombinedStreamEvent, 100)
+	tradesChan := make(chan exchange.CombinedStreamEvent, 10000)
 	go exchange.Connect(cfg.Symbols, tradesChan)
 
 	stopChan := make(chan os.Signal, 1)
@@ -76,15 +83,20 @@ func main() {
 			// ✨ Parse price and update Intelligence/Cache layers
 			priceFloat, parseErr := strconv.ParseFloat(trade.Data.Price, 64)
 			if parseErr == nil {
-				// 1. Calculate running volatility
 				volatility := volTracker.ProcessTick(trade.Data.Symbol, priceFloat)
-
-				// 2. Safely write to our RWMutex cache
 				marketCache.UpdatePrice(trade.Data.Symbol, priceFloat, volatility)
 
-				// (Optional) Log highly volatile moments!
+				// ✨ FIX 2: The Debouncer
 				if volatility > 5.0 {
-					log.Printf("[ALERT] High volatility detected on %s: %.2f", trade.Data.Symbol, volatility)
+					alertMutex.Lock()
+					lastTime, exists := lastAlertTime[trade.Data.Symbol]
+
+					// Only alert if we haven't alerted for this coin in the last 5 seconds
+					if !exists || time.Since(lastTime) > 5*time.Second {
+						log.Printf("🚨 [ALERT] High volatility detected on %s: %.2f", trade.Data.Symbol, volatility)
+						lastAlertTime[trade.Data.Symbol] = time.Now()
+					}
+					alertMutex.Unlock()
 				}
 			} else {
 				log.Printf("[WARN] Failed to parse price for %s: %v", trade.Data.Symbol, parseErr)

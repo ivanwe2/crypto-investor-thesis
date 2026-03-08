@@ -8,19 +8,21 @@ import { useAuthStore } from '../../features/auth/store/authStore';
 class SignalRService {
     private connection: signalR.HubConnection | null = null;
     private isConnecting = false;
+    private currentToken: string | null = null;
     private readonly hubUrl = `${AppConfig.ApiBaseUrl}${AppConfig.SignalR.HubPath}`;
 
     public async startConnection(): Promise<void> {
-        // ✨ 1. If we are currently in the middle of connecting, ignore duplicate requests
         if (this.isConnecting) return;
 
-        // ✨ 2. If we are already connected, DO NOT drop the connection! 
-        // This makes adding coins to the watchlist lightning fast.
-        if (this.connection?.state === signalR.HubConnectionState.Connected) {
+        const newToken = useAuthStore.getState().token;
+
+        // ✨ 2. FIXED: If we are already connected AND the token hasn't changed, DO NOT drop the connection! 
+        if (this.connection?.state === signalR.HubConnectionState.Connected && this.currentToken === newToken) {
             return;
         }
 
         this.isConnecting = true;
+        this.currentToken = newToken;
 
         try {
             if (this.connection) {
