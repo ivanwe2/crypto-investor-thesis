@@ -39,6 +39,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<SettlementQueue>();
         services.AddSingleton<IMessagePublisher, RabbitMqPublisher>();
         services.AddHostedService<RabbitMqListener>();
+        services.AddHostedService<AiSignalListener>();
         services.AddHostedService<OrderMatchingWorker>();
         services.AddHostedService<TradeSettlementWorker>();
         services.AddHostedService<OutboxProcessorWorker>();

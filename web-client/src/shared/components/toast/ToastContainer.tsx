@@ -23,6 +23,11 @@ export const ToastContainer = () => {
                     bgColor = tokens.colorPaletteRedBackground1;
                     fgColor = tokens.colorPaletteRedForeground1;
                     borderColor = tokens.colorPaletteRedBorder2;
+                }else if (toast.type === 'ai') {
+                    // ✨ NEW: AI Styling! Deep Plum/Purple colors native to Fluent UI
+                    bgColor = tokens.colorPalettePlumBackground2;
+                    fgColor = tokens.colorPalettePlumForeground2;
+                    borderColor = tokens.colorPalettePlumBorderActive;
                 }
 
                 return (
@@ -33,10 +38,13 @@ export const ToastContainer = () => {
                             backgroundColor: bgColor,
                             color: fgColor,
                             borderColor: borderColor,
+                            // If it's AI, add a cool subtle glow effect!
+                            boxShadow: toast.type === 'ai' ? `0 4px 15px ${tokens.colorPalettePlumBackground2}` : '0 4px 12px rgba(0,0,0,0.15)'
                         }}
                         onClick={() => removeNotification(toast.id)}
                     >
-                        {toast.message}
+                        {/* If you want multi-line text (for the AI reason), white-space pre-line fixes it */}
+                        <span style={{ whiteSpace: 'pre-line' }}>{toast.message}</span>
                     </div>
                 );
             })}

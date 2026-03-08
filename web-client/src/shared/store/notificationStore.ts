@@ -3,12 +3,12 @@ import { create } from 'zustand';
 export interface ToastNotification {
     id: string;
     message: string;
-    type: 'success' | 'error' | 'info';
+    type: 'success' | 'error' | 'info'| 'ai'; 
 }
 
 interface NotificationState {
     notifications: ToastNotification[];
-    addNotification: (message: string, type?: 'success' | 'error' | 'info') => void;
+    addNotification: (message: string, type?: 'success' | 'error' | 'info' | 'ai') => void;
     removeNotification: (id: string) => void;
 }
 
@@ -21,12 +21,13 @@ export const useNotificationStore = create<NotificationState>((set) => ({
             notifications: [...state.notifications, { id, message, type }]
         }));
 
-        // Auto-remove after 4 seconds
+        const timeoutMs = type === 'ai' ? 7000 : 4000;
+
         setTimeout(() => {
             set((state) => ({
                 notifications: state.notifications.filter((n) => n.id !== id)
             }));
-        }, 4000);
+        }, timeoutMs);
     },
 
     removeNotification: (id) => {
