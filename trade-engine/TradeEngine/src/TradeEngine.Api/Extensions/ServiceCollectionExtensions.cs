@@ -1,4 +1,5 @@
 ﻿using Asp.Versioning;
+using Marketgateway.V1;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
@@ -18,6 +19,7 @@ using TradeEngine.Infrastructure.BackgroundServices.TradeSettlement;
 using TradeEngine.Infrastructure.Persistence;
 using TradeEngine.Infrastructure.Services;
 using TradeEngine.Infrastructure.Services.Messaging;
+using TradeEngine.Infrastructure.Services.Orders;
 using TradeEngine.Infrastructure.Services.TradeSettlement;
 using TradeEngine.Infrastructure.SignalR.Providers;
 using TradeEngine.Infrastructure.SignalR.Services;
@@ -37,6 +39,7 @@ public static class ServiceCollectionExtensions
         services.AddMemoryCache();
         services.AddSingleton<IMarketStateCache, MarketStateCache>();
         services.AddSingleton<SettlementQueue>();
+        services.AddSingleton<OrderIngressQueue>();
         services.AddSingleton<IMessagePublisher, RabbitMqPublisher>();
         services.AddHostedService<RabbitMqListener>();
         services.AddHostedService<AiSignalListener>();
@@ -44,6 +47,13 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<TradeSettlementWorker>();
         services.AddHostedService<OutboxProcessorWorker>();
 
+        services.AddGrpcClient<MarketDataService.MarketDataServiceClient>(options =>
+        {
+            var gatewayUrl = configuration[MarketGatewayConstants.UrlConfigKey] 
+                             ?? MarketGatewayConstants.DefaultUrl;
+            options.Address = new Uri(gatewayUrl);
+        });
+        
         services.AddHttpClient<IAiAnalyst, HttpAiAnalyst>(client =>
         {
             string aiUrl = configuration[AiAnalystConstants.UrlConfigKey] 
