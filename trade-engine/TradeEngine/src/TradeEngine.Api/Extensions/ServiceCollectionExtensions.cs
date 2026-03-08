@@ -1,4 +1,5 @@
 ﻿using Asp.Versioning;
+using Marketgateway.V1;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
@@ -6,6 +7,8 @@ using Microsoft.IdentityModel.Tokens;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
+using Polly;
+using Polly.Extensions.Http;
 using System.Text;
 using TradeEngine.Api.Middleware.ExceptionHandling;
 using TradeEngine.Api.Services;
@@ -13,9 +16,12 @@ using TradeEngine.Application.Constants;
 using TradeEngine.Application.Interfaces;
 using TradeEngine.Infrastructure.BackgroundServices.Messaging;
 using TradeEngine.Infrastructure.BackgroundServices.OrderMatching;
+using TradeEngine.Infrastructure.BackgroundServices.OutboxProcessor;
 using TradeEngine.Infrastructure.BackgroundServices.TradeSettlement;
 using TradeEngine.Infrastructure.Persistence;
 using TradeEngine.Infrastructure.Services;
+using TradeEngine.Infrastructure.Services.Messaging;
+using TradeEngine.Infrastructure.Services.Orders;
 using TradeEngine.Infrastructure.Services.TradeSettlement;
 using TradeEngine.Infrastructure.SignalR.Providers;
 using TradeEngine.Infrastructure.SignalR.Services;
@@ -29,16 +35,33 @@ public static class ServiceCollectionExtensions
         var connectionString = configuration.GetConnectionString("DefaultConnection");
         services.AddDbContextPool<TradeEngineDbContext>(options =>
         {
-            options.UseNpgsql(connectionString);
+            options.UseNpgsql(connectionString, npgsqlOptionsAction =>
+            {
+                npgsqlOptionsAction.EnableRetryOnFailure(
+                    maxRetryCount: 3,
+                    maxRetryDelay: TimeSpan.FromSeconds(5),
+                    errorCodesToAdd: null);
+            });
         }, poolSize: 1024);
 
         services.AddMemoryCache();
         services.AddSingleton<IMarketStateCache, MarketStateCache>();
         services.AddSingleton<SettlementQueue>();
+        services.AddSingleton<OrderIngressQueue>();
+        services.AddSingleton<IMessagePublisher, RabbitMqPublisher>();
         services.AddHostedService<RabbitMqListener>();
+        services.AddHostedService<AiSignalListener>();
         services.AddHostedService<OrderMatchingWorker>();
         services.AddHostedService<TradeSettlementWorker>();
+        services.AddHostedService<OutboxProcessorWorker>();
 
+        services.AddGrpcClient<MarketDataService.MarketDataServiceClient>(options =>
+        {
+            var gatewayUrl = configuration[MarketGatewayConstants.UrlConfigKey] 
+                             ?? MarketGatewayConstants.DefaultUrl;
+            options.Address = new Uri(gatewayUrl);
+        });
+        
         services.AddHttpClient<IAiAnalyst, HttpAiAnalyst>(client =>
         {
             string aiUrl = configuration[AiAnalystConstants.UrlConfigKey] 
@@ -48,12 +71,28 @@ public static class ServiceCollectionExtensions
             string apiKey = configuration[AiAnalystConstants.ApiKeyConfigKey]
                             ?? AiAnalystConstants.DefaultApiKey;
             client.DefaultRequestHeaders.Add("X-API-Key", apiKey);
-        });
+        })
+        .AddPolicyHandler(GetRetryPolicy())
+        .AddPolicyHandler(GetCircuitBreakerPolicy());
 
         services.AddScoped<IOrderService, OrderService>();
         services.AddScoped<IWalletService, WalletService>();
 
         return services;
+
+        static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy()
+        {
+            return HttpPolicyExtensions
+                .HandleTransientHttpError()
+                .WaitAndRetryAsync(3, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)));
+        }
+
+        static IAsyncPolicy<HttpResponseMessage> GetCircuitBreakerPolicy()
+        {
+            return HttpPolicyExtensions
+                .HandleTransientHttpError()
+                .CircuitBreakerAsync(3, TimeSpan.FromSeconds(30));
+        }
     }
 
     public static IServiceCollection AddSecurityServices(this IServiceCollection services, IConfiguration configuration)

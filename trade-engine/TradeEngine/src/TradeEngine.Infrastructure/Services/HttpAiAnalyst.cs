@@ -1,6 +1,7 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using Polly.CircuitBreaker;
 using TradeEngine.Application.DTOs.Analysis;
 using TradeEngine.Application.Interfaces;
 
@@ -27,6 +28,11 @@ public class HttpAiAnalyst(
             var result = await response.Content.ReadFromJsonAsync<SentimentResult>(_options, cancellationToken);
 
             return result ?? new SentimentResult("Unknown", 0.0, "None");
+        }
+        catch (BrokenCircuitException)
+        {
+            logger.LogWarning("🔥 CIRCUIT BREAKER TRIPPED: AI Service is overwhelmed or offline. Returning fallback.");
+            return new SentimentResult("Neutral", 0.0, "AI System Offline. Safety mode engaged.");
         }
         catch (HttpRequestException httpEx)
         {

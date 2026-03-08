@@ -8,6 +8,7 @@ public class TradeEngineDbContext(DbContextOptions<TradeEngineDbContext> options
     public DbSet<Wallet> Wallets { get; set; }
     public DbSet<User> Users { get; set; }
     public DbSet<Order> Orders { get; set; }
+    public DbSet<TradeOutboxMessage> TradeOutboxMessages { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

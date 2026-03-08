@@ -16,4 +16,18 @@ public class SignalRTradeNotifier(IHubContext<MarketDataHub> hubContext) : ITrad
             SignalRConstants.OrderFilledMethod,
             new { symbol, quantity, price });
     }
+
+    public async Task NotifyAiSignalAsync(string symbol, string signal, double confidence, string reason)
+    {
+        // Blast it out to all connected React clients! 
+        // Whale Alert Feed
+        // The backend loop for Option 1 is completely finished! The data is officially flowing from .NET -> Postgres -> RabbitMQ -> Python -> RabbitMQ -> .NET -> SignalR
+        await hubContext.Clients.All.SendAsync("ReceiveAiSignal", new 
+        { 
+            symbol, 
+            signal, 
+            confidence, 
+            reason 
+        });
+    }
 }

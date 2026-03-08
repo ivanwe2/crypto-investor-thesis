@@ -5,10 +5,14 @@ using TradeEngine.Domain.Entities;
 using TradeEngine.Domain.Enums;
 using TradeEngine.Domain.Shared;
 using TradeEngine.Infrastructure.Persistence;
+using TradeEngine.Infrastructure.Services.Orders;
 
 namespace TradeEngine.Infrastructure.Services;
 
-public class OrderService(TradeEngineDbContext dbContext, ICurrentUserService currentUserService) : IOrderService
+public class OrderService(
+    TradeEngineDbContext dbContext,
+    OrderIngressQueue ingressQueue,
+    ICurrentUserService currentUserService) : IOrderService
 {
     public async Task<Result<OrderResponse>> PlaceOrderAsync(PlaceOrderRequest request, CancellationToken cancellationToken = default)
     {
@@ -54,6 +58,8 @@ public class OrderService(TradeEngineDbContext dbContext, ICurrentUserService cu
         dbContext.Orders.Add(order);
 
         await dbContext.SaveChangesAsync(cancellationToken);
+
+        ingressQueue.Writer.TryWrite(order);
 
         return new OrderResponse(order.Id, order.Status.ToString(), "Order placed and funds locked successfully.");
     }

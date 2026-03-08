@@ -7,47 +7,70 @@ import { useAuthStore } from '../../features/auth/store/authStore';
 
 class SignalRService {
     private connection: signalR.HubConnection | null = null;
-    
+    private isConnecting = false;
+    private currentToken: string | null = null;
     private readonly hubUrl = `${AppConfig.ApiBaseUrl}${AppConfig.SignalR.HubPath}`;
 
     public async startConnection(): Promise<void> {
-        // ✨ 2. CRITICAL: If we are logging in/out, cleanly stop the old anonymous connection first!
-        if (this.connection?.state === signalR.HubConnectionState.Connected) {
-            await this.connection.stop();
+        if (this.isConnecting) return;
+
+        const newToken = useAuthStore.getState().token;
+
+        // ✨ 2. FIXED: If we are already connected AND the token hasn't changed, DO NOT drop the connection! 
+        if (this.connection?.state === signalR.HubConnectionState.Connected && this.currentToken === newToken) {
+            return;
         }
 
-        this.connection = new signalR.HubConnectionBuilder()
-            .withUrl(this.hubUrl, {
-                skipNegotiation: true,
-                transport: signalR.HttpTransportType.WebSockets,
-                // ✨ 3. THIS IS THE MISSING MAGIC LINE: Send the JWT token to .NET!
-                accessTokenFactory: () => useAuthStore.getState().token || ''
-            })
-            .withAutomaticReconnect()
-            .build();
-
-        this.connection.on(AppConfig.SignalR.Events.ReceivePriceUpdate, (data: any) => {
-            useMarketStore.getState().updateTicker(data);
-        });
-
-        this.connection.on(AppConfig.SignalR.Events.OrderFilled, (data: { symbol: string, quantity: number, price: number }) => {
-            console.log("🔥 Order Filled Event Received from SignalR:", data);
-            
-            const message = `Order Executed! Bought ${data.quantity} ${data.symbol} at $${data.price.toLocaleString()}`;
-            useNotificationStore.getState().addNotification(message, 'success');
-
-            // Instantly fetch the new crypto balance from the database!
-            useWalletStore.getState().fetchWallet();
-        });
+        this.isConnecting = true;
+        this.currentToken = newToken;
 
         try {
+            if (this.connection) {
+                await this.connection.stop();
+            }
+
+            this.connection = new signalR.HubConnectionBuilder()
+                .withUrl(this.hubUrl, {
+                    skipNegotiation: true,
+                    transport: signalR.HttpTransportType.WebSockets,
+                    accessTokenFactory: () => useAuthStore.getState().token || ''
+                })
+                .withAutomaticReconnect()
+                .build();
+
+            this.connection.on(AppConfig.SignalR.Events.ReceivePriceUpdate, (data: any) => {
+                useMarketStore.getState().updateTicker(data);
+            });
+
+            this.connection.on(AppConfig.SignalR.Events.OrderFilled, (data: { symbol: string, quantity: number, price: number }) => {
+                console.log("🔥 Order Filled Event Received from SignalR:", data);
+                
+                const message = `Order Executed! Bought ${data.quantity} ${data.symbol} at $${data.price.toLocaleString()}`;
+                useNotificationStore.getState().addNotification(message, 'success');
+
+                useWalletStore.getState().fetchWallet();
+            });
+
+            this.connection.on("ReceiveAiSignal", (data: { symbol: string, signal: string, confidence: number, reason: string }) => {
+                console.log("🤖 AI Signal Received:", data);
+                
+                const confidencePercent = (data.confidence * 100).toFixed(0);
+                const message = `🤖 AI Alert: ${data.symbol} is ${data.signal} (${confidencePercent}%)\n\n${data.reason}`;
+                
+                useNotificationStore.getState().addNotification(message, 'ai');
+            });
+
             await this.connection.start();
-            // Added a log so you can explicitly see if it connected as a logged-in user or anonymous
             const hasToken = !!useAuthStore.getState().token;
             console.log(`✅ SignalR Connected (Authenticated: ${hasToken})`);
         } catch (err) {
             console.error('SignalR Connection Error: ', err);
-            setTimeout(() => this.startConnection(), 5000);
+            setTimeout(() => {
+                this.isConnecting = false;
+                this.startConnection();
+            }, 5000);
+        } finally {
+            this.isConnecting = false;
         }
     }
 
