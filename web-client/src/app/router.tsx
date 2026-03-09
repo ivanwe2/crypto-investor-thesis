@@ -2,6 +2,7 @@ import { createBrowserRouter } from "react-router-dom";
 import { AppLayout } from "../shared/components/layout/AppLayout";
 import { Dashboard } from "../features/market/components/Dashboard";
 import { ProtectedRoute } from "../shared/components/layout/ProtectedRoute";
+import { PortfolioPage } from "../features/portfolio/components/Portfolio/PortfolioPage";
 
 export const router = createBrowserRouter([
   {
@@ -17,7 +18,7 @@ export const router = createBrowserRouter([
         children: [
           {
             path: "portfolio",
-            element: <div style={{ padding: "2rem" }}>Portfolio Page (Coming Soon)</div>,
+            element: <PortfolioPage />,
           },
           {
             path: "orders",
