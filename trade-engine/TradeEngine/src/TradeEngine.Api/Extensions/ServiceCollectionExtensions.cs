@@ -63,6 +63,9 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<TradeSettlementWorker>();
         services.AddHostedService<OutboxProcessorWorker>();
 
+        services.AddScoped<ITradeEngineDbContext>(provider => 
+            provider.GetRequiredService<TradeEngineDbContext>());
+
         services.AddGrpcClient<MarketDataService.MarketDataServiceClient>(options =>
         {
             var gatewayUrl = configuration[MarketGatewayConstants.UrlConfigKey] 

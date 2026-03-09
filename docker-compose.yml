@@ -95,6 +95,7 @@ services:
       - Otlp__Endpoint=http://otel-collector:4317
       - Otlp__ServiceName=thesis-trade-engine
       - Otlp__ServiceVersion=v0.4.0
+      - MarketGateway__Url=http://ingestor:50051
     networks:
       - thesis-network
 
