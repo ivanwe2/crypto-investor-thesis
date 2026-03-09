@@ -41,6 +41,18 @@ services:
     networks:
       - thesis-network
 
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: thesis-redis-exporter
+    environment:
+      - REDIS_ADDR=redis://redis:6379
+    ports:
+      - "9121:9121"
+    networks:
+      - thesis-network
+    depends_on:
+      - redis
+
   # ==============================================
   # MICROSERVICES
   # ==============================================
@@ -75,6 +87,7 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development 
       - ConnectionStrings__DefaultConnection=Host=postgres;Database=trading_db;Username=admin;Password=password
+      - ConnectionStrings__Redis=redis:6379
       - RabbitMq__Host=rabbitmq
       - RabbitMq__Port=5672
       - RabbitMq__Username=user

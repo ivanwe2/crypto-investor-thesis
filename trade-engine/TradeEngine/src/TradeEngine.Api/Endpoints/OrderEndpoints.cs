@@ -1,6 +1,8 @@
+using MediatR;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using TradeEngine.Application.DTOs.Order;
+using TradeEngine.Application.Features.Orders;
 using TradeEngine.Application.Interfaces;
 
 namespace TradeEngine.Api.Endpoints;
@@ -18,10 +20,20 @@ public static class OrderEndpoints
 
     private static async Task<Results<Ok<OrderResponse>, BadRequest<string>>> PlaceOrderAsync(
         [FromBody] PlaceOrderRequest request, 
-        IOrderService orderService, 
+        ISender sender, 
+        ICurrentUserService currentUserService,
         CancellationToken ct)
     {
-        var result = await orderService.PlaceOrderAsync(request, ct);
+        var command = new PlaceOrderCommand(
+            currentUserService.UserId,
+            request.Symbol,
+            request.Side,
+            request.Type,
+            request.Quantity,
+            request.TargetPrice
+        );
+
+        var result = await sender.Send(command, ct);
         
         return result.IsSuccess 
             ? TypedResults.Ok(result.Value) 

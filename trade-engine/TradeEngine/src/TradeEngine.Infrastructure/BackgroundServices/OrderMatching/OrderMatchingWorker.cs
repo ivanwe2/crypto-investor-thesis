@@ -2,7 +2,6 @@ using System.Collections.Concurrent;
 using Grpc.Core;
 using Marketgateway.V1;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -10,7 +9,6 @@ using TradeEngine.Application.Interfaces;
 using TradeEngine.Domain.Entities;
 using TradeEngine.Domain.Enums;
 using TradeEngine.Infrastructure.Persistence;
-using TradeEngine.Infrastructure.Services;
 using TradeEngine.Infrastructure.Services.Orders;
 using TradeEngine.Infrastructure.Services.TradeSettlement;
 
@@ -19,20 +17,18 @@ namespace TradeEngine.Infrastructure.BackgroundServices.OrderMatching;
 public class OrderMatchingWorker(
     IServiceScopeFactory scopeFactory,
     SettlementQueue settlementQueue,
-    OrderIngressQueue ingressQueue,
+    IOrderIngressQueue ingressQueue,
     ILogger<OrderMatchingWorker> logger) : BackgroundService
 {
-    // Our local RAM book
-    private readonly ConcurrentDictionary<string, List<Order>> _localOrderBook = new();
+    // ✨ BOOST: Changed inner collection to Dictionary<Guid, Order> for O(1) removals instead of O(N) List shifting
+    private readonly ConcurrentDictionary<string, Dictionary<Guid, Order>> _localOrderBook = new();
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        logger.LogInformation("🚀 Ultimate HFT Event-Driven Order Matcher started.");
+        logger.LogInformation("🚀 Ultimate HFT Event-Driven Order Matcher started (O(1) Optimized).");
 
-        // 1. Load pending orders from the database ONLY ONCE on startup
         await LoadInitialOrdersAsync(stoppingToken);
 
-        // 2. Run the two event-driven loops concurrently
         var ingressTask = ListenForNewOrdersAsync(stoppingToken);
         var matchTask = StreamAndMatchAsync(stoppingToken);
 
@@ -49,8 +45,10 @@ public class OrderMatchingWorker(
             .AsNoTracking()
             .ToListAsync(stoppingToken);
 
-        var grouped = pendingOrders.GroupBy(o => o.Symbol)
-                                   .ToDictionary(g => g.Key, g => g.ToList());
+        // Map to nested dictionaries
+        var grouped = pendingOrders
+            .GroupBy(o => o.Symbol)
+            .ToDictionary(g => g.Key, g => g.ToDictionary(o => o.Id, o => o));
         
         foreach (var kvp in grouped)
         {
@@ -62,20 +60,18 @@ public class OrderMatchingWorker(
 
     private async Task ListenForNewOrdersAsync(CancellationToken stoppingToken)
     {
-        // ✨ LEVEL 3 FIX: Instantly add new orders to the RAM book as they arrive from the API
         await foreach (var newOrder in ingressQueue.Reader.ReadAllAsync(stoppingToken))
         {
             _localOrderBook.AddOrUpdate(
                 newOrder.Symbol,
-                [newOrder], // If symbol doesn't exist, create new list
-                (key, existingList) => 
+                new Dictionary<Guid, Order> { [newOrder.Id] = newOrder }, 
+                (key, existingDict) => 
                 {
-                    // Using a lock here ensures thread safety for the specific list being modified
-                    lock (existingList) 
+                    lock (existingDict) 
                     {
-                        existingList.Add(newOrder);
+                        existingDict[newOrder.Id] = newOrder; // O(1) Add
                     }
-                    return existingList;
+                    return existingDict;
                 }
             );
             
@@ -93,7 +89,7 @@ public class OrderMatchingWorker(
                 var grpcClient = scope.ServiceProvider.GetRequiredService<MarketDataService.MarketDataServiceClient>();
 
                 var request = new StreamRequest(); 
-                request.Symbols.AddRange(new[] { "BTCUSDT", "ETHUSDT", "SOLUSDT", "ADAUSDT" });
+                request.Symbols.AddRange(["BTCUSDT", "ETHUSDT", "SOLUSDT", "ADAUSDT"]);
 
                 logger.LogInformation("📡 Opening continuous gRPC stream to Market Gateway...");
                 using var call = grpcClient.StreamMarketData(request, cancellationToken: stoppingToken);
@@ -109,17 +105,18 @@ public class OrderMatchingWorker(
                     }
 
                     List<Order> matches;
-                    // Lock the list briefly to safely find and remove matching orders
+                    
                     lock (pendingOrders)
                     {
-                        matches = pendingOrders.Where(o => 
+                        // Use .Values to iterate
+                        matches = pendingOrders.Values.Where(o => 
                             (o.Side == OrderSide.Buy && currentPrice <= o.TargetPrice) ||
                             (o.Side == OrderSide.Sell && currentPrice >= o.TargetPrice)
                         ).ToList();
 
                         foreach (var match in matches)
                         {
-                            pendingOrders.Remove(match); // Prevent double-matching
+                            pendingOrders.Remove(match.Id); // ✨ O(1) REMOVAL! Massive performance gain.
                         }
                     }
 
@@ -130,7 +127,6 @@ public class OrderMatchingWorker(
                         }
 
                         logger.LogInformation("🎯 Event-Driven Match! Queuing Order {Id} for Settlement at ${Price}.", match.Id, currentPrice);
-                        
                         settlementQueue.Writer.TryWrite(new TradeSettlementCommand(match.Id, currentPrice));
                     }
                 }
