@@ -5,4 +5,5 @@ export interface TradeData {
     p: number;
     q: number;
     T: number;
+    v?: number;
 }

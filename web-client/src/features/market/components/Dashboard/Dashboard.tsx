@@ -9,16 +9,16 @@ import {
   tokens,
 } from "@fluentui/react-components";
 import { Dismiss16Regular, Add16Regular } from "@fluentui/react-icons";
-import { signalRService } from "../../../shared/services/signalRService";
-import { useMarketStore } from "../store/marketStore";
-import { useAuthStore } from "../../auth/store/authStore";
-import { useWatchlistStore } from "../store/watchlistStore";
+import { signalRService } from "../../../../shared/services/signalRService";
+import { useMarketStore } from "../../store/marketStore";
+import { useAuthStore } from "../../../auth/store/authStore";
+import { useWatchlistStore } from "../../store/watchlistStore";
 
 import styles from "./Dashboard.module.scss";
-import { AuthWidget } from "../../auth/components/AuthWidget";
-import { SentimentWidget } from "../../ai/components/SentimentWidget";
-import { TradePanel } from "../../trading/components/TradePanel";
-import { ToastContainer } from "../../../shared/components/toast/ToastContainer";
+import { AuthWidget } from "../../../auth/components/AuthWidget";
+import { SentimentWidget } from "../../../ai/components/SentimentWidget";
+import { TradePanel } from "../../../trading/components/TradePanel";
+import { ToastContainer } from "../../../../shared/components/toast/ToastContainer";
 
 export const Dashboard = () => {
   const token = useAuthStore((state) => state.token);

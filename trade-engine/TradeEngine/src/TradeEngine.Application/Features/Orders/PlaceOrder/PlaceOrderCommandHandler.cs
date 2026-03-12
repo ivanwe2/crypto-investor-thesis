@@ -5,7 +5,7 @@ using TradeEngine.Application.Interfaces;
 using TradeEngine.Domain.Entities;
 using TradeEngine.Domain.Enums;
 
-namespace TradeEngine.Application.Features.Orders;
+namespace TradeEngine.Application.Features.Orders.PlaceOrder;
 
 public class PlaceOrderCommandHandler(
     ITradeEngineDbContext dbContext,

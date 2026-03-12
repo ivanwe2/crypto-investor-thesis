@@ -2,7 +2,7 @@ using MediatR;
 using TradeEngine.Application.DTOs.Order;
 using TradeEngine.Domain.Enums;
 
-namespace TradeEngine.Application.Features.Orders;
+namespace TradeEngine.Application.Features.Orders.PlaceOrder;
 
 public record PlaceOrderCommand(
     Guid UserId,

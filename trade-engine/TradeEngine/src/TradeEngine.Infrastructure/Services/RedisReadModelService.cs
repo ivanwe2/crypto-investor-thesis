@@ -1,6 +1,7 @@
 using System.Diagnostics.Metrics;
 using System.Text.Json;
 using StackExchange.Redis;
+using TradeEngine.Application.DTOs.Order;
 using TradeEngine.Application.DTOs.Wallet;
 using TradeEngine.Application.Interfaces;
 
@@ -16,7 +17,6 @@ public class RedisReadModelService : IRedisReadModelService
     {
         _redisDb = redis.GetDatabase();
         
-        // 📊 Initialize OpenTelemetry Metrics for Grafana
         var meter = meterFactory.Create("TradeEngine.RedisCQRS");
         _cacheHitCounter = meter.CreateCounter<int>("redis_cache_hits", description: "Number of successful Redis read model hits");
         _cacheMissCounter = meter.CreateCounter<int>("redis_cache_misses", description: "Number of Redis read model misses");
@@ -49,6 +49,29 @@ public class RedisReadModelService : IRedisReadModelService
         await _redisDb.StringSetAsync(key, jsonData);
     }
 
+    public async Task<List<OpenOrderDto>?> GetOpenOrdersAsync(Guid userId, CancellationToken ct = default)
+    {
+        var key = GetOrdersKey(userId);
+        var cachedData = await _redisDb.StringGetAsync(key);
+
+        if (cachedData.HasValue)
+        {
+            RecordCacheHit();
+            return JsonSerializer.Deserialize<List<OpenOrderDto>>((ReadOnlySpan<byte>)cachedData!);
+        }
+
+        RecordCacheMiss();
+        return null;
+    }
+
+    public async Task UpdateOpenOrdersAsync(Guid userId, List<OpenOrderDto> orders, CancellationToken ct = default)
+    {
+        var key = GetOrdersKey(userId);
+        var jsonData = JsonSerializer.Serialize(orders);
+        await _redisDb.StringSetAsync(key, jsonData);
+    }
+    
     public void RecordCacheHit() => _cacheHitCounter.Add(1);
     public void RecordCacheMiss() => _cacheMissCounter.Add(1);
+    private static string GetOrdersKey(Guid userId) => $"orders:open:{userId}";
 }

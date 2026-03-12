@@ -2,7 +2,9 @@ using MediatR;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using TradeEngine.Application.DTOs.Order;
-using TradeEngine.Application.Features.Orders;
+using TradeEngine.Application.Features.Orders.CancelOrder;
+using TradeEngine.Application.Features.Orders.GetOpenOrders;
+using TradeEngine.Application.Features.Orders.PlaceOrder;
 using TradeEngine.Application.Interfaces;
 
 namespace TradeEngine.Api.Endpoints;
@@ -16,6 +18,8 @@ public static class OrderEndpoints
                        .RequireAuthorization();
 
         group.MapPost("/", PlaceOrderAsync).WithName("PlaceOrder");
+        group.MapGet("/open", GetOpenOrdersAsync).WithName("GetOpenOrders");
+        group.MapDelete("/{id:guid}", CancelOrderAsync).WithName("CancelOrder");
     }
 
     private static async Task<Results<Ok<OrderResponse>, BadRequest<string>>> PlaceOrderAsync(
@@ -37,6 +41,32 @@ public static class OrderEndpoints
         
         return result.IsSuccess 
             ? TypedResults.Ok(result.Value) 
+            : TypedResults.BadRequest(result.Error.Name);
+    }
+    private static async Task<Results<Ok<List<OpenOrderDto>>, BadRequest<string>>> GetOpenOrdersAsync(
+        ISender sender, 
+        ICurrentUserService currentUserService,
+        CancellationToken ct)
+    {
+        var query = new GetOpenOrdersQuery(currentUserService.UserId);
+        var result = await sender.Send(query, ct);
+        
+        return result.IsSuccess 
+            ? TypedResults.Ok(result.Value) 
+            : TypedResults.BadRequest(result.Error.Name);
+    }
+
+    private static async Task<Results<NoContent, BadRequest<string>>> CancelOrderAsync(
+        [FromRoute] Guid id,
+        ISender sender,
+        ICurrentUserService currentUserService,
+        CancellationToken ct)
+    {
+        var command = new CancelOrderCommand(id, currentUserService.UserId);
+        var result = await sender.Send(command, ct);
+
+        return result.IsSuccess 
+            ? TypedResults.NoContent() 
             : TypedResults.BadRequest(result.Error.Name);
     }
 }

@@ -3,4 +3,5 @@ export interface MarketTicker {
     price: number;
     timestamp: number;
     trend: 'up' | 'down' | 'neutral';
+    volatility: number;
 }
