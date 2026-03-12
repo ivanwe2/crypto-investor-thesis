@@ -74,18 +74,20 @@ public class OutboxProcessorWorker(
     {
         try
         {
-            // Extract UserId from the JSON event payload
             using var document = JsonDocument.Parse(jsonContent);
-            if (!document.RootElement.TryGetProperty("UserId", out var userIdElement) || 
-                !Guid.TryParse(userIdElement.GetString(), out var userId))
-            {
-                return;
-            }
+            
+            // Extract UserId AND OrderId from the JSON event payload
+            if (!document.RootElement.TryGetProperty("UserId", out var userIdElement) || !Guid.TryParse(userIdElement.GetString(), out var userId)) return;
+            if (!document.RootElement.TryGetProperty("OrderId", out var orderIdElement) || !Guid.TryParse(orderIdElement.GetString(), out var orderId)) return;
 
             var redisService = sp.GetRequiredService<IRedisReadModelService>();
             var dbContext = sp.GetRequiredService<TradeEngineDbContext>();
 
-            // Fetch the freshly settled wallet from Postgres (AsNoTracking for speed)
+            // 1. ✨ CLEANUP: Remove the filled order from the Open Orders Redis Cache
+            await redisService.RemoveOpenOrderAsync(userId, orderId, ct);
+            logger.LogInformation("⚡ Redis Read Model: Order {OrderId} removed from active orders.", orderId);
+
+            // 2. UPDATE WALLET: Fetch the freshly settled wallet from Postgres
             var wallet = await dbContext.Wallets
                 .Include(w => w.Balances)
                 .AsNoTracking()
@@ -93,17 +95,16 @@ public class OutboxProcessorWorker(
 
             if (wallet != null)
             {
-                // Map to DTO and push to Redis immediately
                 var balances = wallet.Balances.Select(b => new AssetBalanceDto(b.Currency, b.Amount)).ToList();
                 var response = new WalletResponse(wallet.Id, balances);
                 
                 await redisService.UpdateUserPortfolioAsync(userId, response, ct);
-                logger.LogInformation("⚡ Redis Read Model updated instantly for User {UserId}", userId);
+                logger.LogInformation("⚡ Redis Read Model updated instantly for User {UserId} (Wallet)", userId);
             }
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "⚠️ Failed to project TradeSettled event to Redis. Fallback DB query will handle next read.");
+            logger.LogError(ex, "⚠️ Failed to project TradeSettled event to Redis.");
         }
     }
 }

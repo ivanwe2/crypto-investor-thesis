@@ -2,7 +2,9 @@ using MediatR;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using TradeEngine.Application.DTOs.Order;
+using TradeEngine.Application.DTOs.Trade;
 using TradeEngine.Application.Features.Orders.CancelOrder;
+using TradeEngine.Application.Features.Orders.GetHistory;
 using TradeEngine.Application.Features.Orders.GetOpenOrders;
 using TradeEngine.Application.Features.Orders.PlaceOrder;
 using TradeEngine.Application.Interfaces;
@@ -19,9 +21,24 @@ public static class OrderEndpoints
 
         group.MapPost("/", PlaceOrderAsync).WithName("PlaceOrder");
         group.MapGet("/open", GetOpenOrdersAsync).WithName("GetOpenOrders");
+        group.MapGet("/history", GetTradeHistoryAsync).WithName("GetTradeHistory");
         group.MapDelete("/{id:guid}", CancelOrderAsync).WithName("CancelOrder");
     }
 
+    private static async Task<Results<Ok<List<TradeHistoryDto>>, BadRequest<string>>> GetTradeHistoryAsync(
+        [FromQuery] int? limit,
+        ISender sender, 
+        ICurrentUserService currentUserService,
+        CancellationToken ct)
+    {
+        var query = new GetTradeHistoryQuery(currentUserService.UserId, limit ?? 50);
+        var result = await sender.Send(query, ct);
+        
+        return result.IsSuccess 
+            ? TypedResults.Ok(result.Value) 
+            : TypedResults.BadRequest(result.Error.Name);
+    }
+    
     private static async Task<Results<Ok<OrderResponse>, BadRequest<string>>> PlaceOrderAsync(
         [FromBody] PlaceOrderRequest request, 
         ISender sender, 

@@ -12,30 +12,59 @@ import {
   TableHeaderCell,
   TableBody,
   TableCell,
-  tokens
+  tokens,
+  TabList,
+  Tab
 } from "@fluentui/react-components";
-import { DismissCircle16Regular, ArrowClockwise16Regular } from "@fluentui/react-icons";
+import { 
+  DismissCircle16Regular, 
+  ArrowClockwise16Regular,
+  CheckmarkCircle16Regular,
+  ErrorCircle16Regular,
+  Clock16Regular
+} from "@fluentui/react-icons";
 import { orderService } from "../../services/orderService";
 import type { OpenOrderDto } from "../../dtos/OrderDtos";
+import type { TradeHistoryDto } from "../../dtos/TradeHistoryDto";
+
 
 export const OrdersPage = () => {
   const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState<"open" | "history">("open");
   const [cancellingId, setCancellingId] = useState<string | null>(null);
 
-  // 1. Fetch Open Orders from .NET / Redis
-  const { data: orders = [], isLoading, isFetching, refetch } = useQuery<OpenOrderDto[]>({
+  // 1. Fetch Open Orders from Redis (Blazing Fast)
+  const { 
+    data: openOrders = [], 
+    isLoading: isLoadingOpen, 
+    isFetching: isFetchingOpen, 
+    refetch: refetchOpen 
+  } = useQuery<OpenOrderDto[]>({
     queryKey: ["orders", "open"],
     queryFn: orderService.getOpenOrders,
     staleTime: 5000,
   });
 
-  // 2. Cancel Order Mutation
+  // 2. Fetch Trade History from Postgres
+  const { 
+    data: tradeHistory = [], 
+    isLoading: isLoadingHistory, 
+    isFetching: isFetchingHistory, 
+    refetch: refetchHistory 
+  } = useQuery<TradeHistoryDto[]>({
+    queryKey: ["orders", "history"],
+    queryFn: () => orderService.getTradeHistory(50),
+    staleTime: 15000, // History doesn't change as fast, cache it slightly longer
+  });
+
+  // 3. Cancel Order Mutation
   const cancelMutation = useMutation({
     mutationFn: (id: string) => orderService.cancelOrder(id),
     onMutate: (id) => setCancellingId(id),
     onSuccess: () => {
-      // Invalidate both so the UI table updates and the Wallet balances refresh
+      // Refresh open orders and history (in case it moved to cancelled)
       queryClient.invalidateQueries({ queryKey: ["orders", "open"] });
+      queryClient.invalidateQueries({ queryKey: ["orders", "history"] });
       queryClient.invalidateQueries({ queryKey: ["portfolio"] });
     },
     onSettled: () => setCancellingId(null),
@@ -45,15 +74,25 @@ export const OrdersPage = () => {
     }
   });
 
+  const isFetching = activeTab === "open" ? isFetchingOpen : isFetchingHistory;
+  const handleRefetch = () => activeTab === "open" ? refetchOpen() : refetchHistory();
+
+  const renderStatusBadge = (status: string) => {
+    const s = status.toUpperCase();
+    if (s === "FILLED") return <Badge color="success" icon={<CheckmarkCircle16Regular />} appearance="tint">Filled</Badge>;
+    if (s === "CANCELLED") return <Badge color="danger" icon={<ErrorCircle16Regular />} appearance="tint">Cancelled</Badge>;
+    return <Badge color="warning" icon={<Clock16Regular />} appearance="tint">{status}</Badge>;
+  };
+
   return (
     <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "24px", maxWidth: "1200px", margin: "0 auto" }}>
       
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
         <div>
-          <Text size={800} weight="bold">Active Orders</Text>
+          <Text size={800} weight="bold">Orders & History</Text>
           <div style={{ marginTop: "4px" }}>
             <Text size={300} style={{ color: tokens.colorNeutralForeground3 }}>
-              Manage your pending limit orders across all markets.
+              Manage your active limits and review your settled trades.
             </Text>
           </div>
         </div>
@@ -61,91 +100,143 @@ export const OrdersPage = () => {
         <Button 
           icon={isFetching ? <Spinner size="tiny" /> : <ArrowClockwise16Regular />} 
           appearance="secondary"
-          onClick={() => refetch()}
+          onClick={handleRefetch}
           disabled={isFetching}
         >
           Refresh Data
         </Button>
       </div>
 
-      <Card style={{ backgroundColor: tokens.colorNeutralBackground1Hover, padding: 0, overflow: "hidden" }}>
-        {isLoading ? (
-          <div style={{ padding: "40px", display: "flex", justifyContent: "center" }}>
-            <Spinner label="Loading orders from Redis..." />
-          </div>
-        ) : orders.length === 0 ? (
-          <div style={{ padding: "40px", textAlign: "center" }}>
-            <Text size={400} style={{ color: tokens.colorNeutralForeground3 }}>You have no open orders.</Text>
-          </div>
-        ) : (
-          <div style={{ overflowX: "auto" }}>
-            <Table aria-label="Open Orders Table">
-              <TableHeader style={{ backgroundColor: tokens.colorNeutralBackground2 }}>
-                <TableRow>
-                  <TableHeaderCell>Date</TableHeaderCell>
-                  <TableHeaderCell>Symbol</TableHeaderCell>
-                  <TableHeaderCell>Side</TableHeaderCell>
-                  <TableHeaderCell>Price</TableHeaderCell>
-                  <TableHeaderCell>Amount</TableHeaderCell>
-                  <TableHeaderCell>Status</TableHeaderCell>
-                  <TableHeaderCell style={{ textAlign: "right" }}>Action</TableHeaderCell>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {orders.map((order) => (
-                  <TableRow key={order.id} style={{ borderBottom: `1px solid ${tokens.colorNeutralStroke2}` }}>
-                    
-                    <TableCell>
-                      <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                        {new Date(order.createdAtUtc).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                      </Text>
-                    </TableCell>
-                    
-                    <TableCell>
-                      <Text weight="bold">{order.symbol}</Text>
-                    </TableCell>
-                    
-                    <TableCell>
-                      <Badge 
-                        appearance="tint" 
-                        color={order.side === "Buy" ? "success" : "danger"}
-                        shape="rounded"
-                      >
-                        {order.side}
-                      </Badge>
-                    </TableCell>
-                    
-                    <TableCell>
-                      <Text>${order.targetPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text>
-                    </TableCell>
-                    
-                    <TableCell>
-                      <Text>{order.quantity}</Text>
-                    </TableCell>
-                    
-                    <TableCell>
-                      <Badge appearance="outline" color="informative" shape="rounded">
-                        {order.status}
-                      </Badge>
-                    </TableCell>
-                    
-                    <TableCell style={{ textAlign: "right" }}>
-                      <Button
-                        appearance="transparent"
-                        icon={cancellingId === order.id ? <Spinner size="tiny" /> : <DismissCircle16Regular />}
-                        style={{ color: tokens.colorPaletteRedForeground1 }}
-                        onClick={() => cancelMutation.mutate(order.id)}
-                        disabled={cancellingId === order.id}
-                      >
-                        Cancel
-                      </Button>
-                    </TableCell>
+      {/* Fluent UI Tab Navigation */}
+      <TabList selectedValue={activeTab} onTabSelect={(_, data) => setActiveTab(data.value as "open" | "history")}>
+        <Tab value="open">Open Orders ({openOrders.length})</Tab>
+        <Tab value="history">Trade History</Tab>
+      </TabList>
 
+      <Card style={{ backgroundColor: tokens.colorNeutralBackground1Hover, padding: 0, overflow: "hidden" }}>
+        
+        {/* --- OPEN ORDERS TAB --- */}
+        {activeTab === "open" && (
+          isLoadingOpen ? (
+            <div style={{ padding: "40px", display: "flex", justifyContent: "center" }}>
+              <Spinner label="Loading open orders..." />
+            </div>
+          ) : openOrders.length === 0 ? (
+            <div style={{ padding: "40px", textAlign: "center" }}>
+              <Text size={400} style={{ color: tokens.colorNeutralForeground3 }}>You have no open orders.</Text>
+            </div>
+          ) : (
+            <div style={{ overflowX: "auto" }}>
+              <Table aria-label="Open Orders Table">
+                <TableHeader style={{ backgroundColor: tokens.colorNeutralBackground2 }}>
+                  <TableRow>
+                    <TableHeaderCell>Date</TableHeaderCell>
+                    <TableHeaderCell>Symbol</TableHeaderCell>
+                    <TableHeaderCell>Side</TableHeaderCell>
+                    <TableHeaderCell>Price</TableHeaderCell>
+                    <TableHeaderCell>Amount</TableHeaderCell>
+                    <TableHeaderCell>Status</TableHeaderCell>
+                    <TableHeaderCell style={{ textAlign: "right" }}>Action</TableHeaderCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                </TableHeader>
+                <TableBody>
+                  {openOrders.map((order) => (
+                    <TableRow key={order.id} style={{ borderBottom: `1px solid ${tokens.colorNeutralStroke2}` }}>
+                      <TableCell>
+                        <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+                          {new Date(order.createdAtUtc).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </Text>
+                      </TableCell>
+                      <TableCell><Text weight="bold">{order.symbol}</Text></TableCell>
+                      <TableCell>
+                        <Badge appearance="tint" color={order.side === "Buy" ? "success" : "danger"} shape="rounded">
+                          {order.side}
+                        </Badge>
+                      </TableCell>
+                      <TableCell><Text>${order.targetPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text></TableCell>
+                      <TableCell><Text>{order.quantity}</Text></TableCell>
+                      <TableCell>
+                        <Badge appearance="outline" color="informative" shape="rounded">{order.status}</Badge>
+                      </TableCell>
+                      <TableCell style={{ textAlign: "right" }}>
+                        <Button
+                          appearance="transparent"
+                          icon={cancellingId === order.id ? <Spinner size="tiny" /> : <DismissCircle16Regular />}
+                          style={{ color: tokens.colorPaletteRedForeground1 }}
+                          onClick={() => cancelMutation.mutate(order.id)}
+                          disabled={cancellingId === order.id}
+                        >
+                          Cancel
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )
+        )}
+
+        {/* --- TRADE HISTORY TAB --- */}
+        {activeTab === "history" && (
+          isLoadingHistory ? (
+            <div style={{ padding: "40px", display: "flex", justifyContent: "center" }}>
+              <Spinner label="Loading history from ledger..." />
+            </div>
+          ) : tradeHistory.length === 0 ? (
+            <div style={{ padding: "40px", textAlign: "center" }}>
+              <Text size={400} style={{ color: tokens.colorNeutralForeground3 }}>You have no completed trades yet.</Text>
+            </div>
+          ) : (
+            <div style={{ overflowX: "auto" }}>
+              <Table aria-label="Trade History Table">
+                <TableHeader style={{ backgroundColor: tokens.colorNeutralBackground2 }}>
+                  <TableRow>
+                    <TableHeaderCell>Date</TableHeaderCell>
+                    <TableHeaderCell>Symbol</TableHeaderCell>
+                    <TableHeaderCell>Side</TableHeaderCell>
+                    <TableHeaderCell>Type</TableHeaderCell>
+                    <TableHeaderCell>Target Price</TableHeaderCell>
+                    <TableHeaderCell>Exec. Price</TableHeaderCell>
+                    <TableHeaderCell>Amount</TableHeaderCell>
+                    <TableHeaderCell style={{ textAlign: "center" }}>Status</TableHeaderCell>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {tradeHistory.map((trade) => (
+                    <TableRow key={trade.id} style={{ borderBottom: `1px solid ${tokens.colorNeutralStroke2}` }}>
+                      <TableCell>
+                        <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+                          {new Date(trade.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                        </Text>
+                      </TableCell>
+                      <TableCell><Text weight="bold">{trade.symbol}</Text></TableCell>
+                      <TableCell>
+                        <Badge appearance="tint" color={trade.side.toUpperCase() === "BUY" ? "success" : "danger"} shape="rounded">
+                          {trade.side}
+                        </Badge>
+                      </TableCell>
+                      <TableCell><Text>{trade.type}</Text></TableCell>
+                      <TableCell>
+                        <Text style={trade.executionPrice ? { textDecoration: 'line-through', color: tokens.colorNeutralForeground4 } : {}}>
+                          ${trade.targetPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </Text>
+                      </TableCell>
+                      <TableCell>
+                        <Text weight="bold">
+                          {trade.executionPrice ? `$${trade.executionPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '-'}
+                        </Text>
+                      </TableCell>
+                      <TableCell><Text>{trade.quantity}</Text></TableCell>
+                      <TableCell style={{ textAlign: "center" }}>
+                        {renderStatusBadge(trade.status)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )
         )}
       </Card>
     </div>

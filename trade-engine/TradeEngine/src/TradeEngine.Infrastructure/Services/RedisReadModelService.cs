@@ -23,6 +23,7 @@ public class RedisReadModelService : IRedisReadModelService
     }
 
     private static string GetPortfolioKey(Guid userId) => $"portfolio:{userId}";
+    private static string GetOrdersKey(Guid userId) => $"orders:open:{userId}";
 
     public async Task<WalletResponse?> GetUserPortfolioAsync(Guid userId, CancellationToken ct = default)
     {
@@ -32,7 +33,7 @@ public class RedisReadModelService : IRedisReadModelService
         if (cachedData.HasValue)
         {
             RecordCacheHit();
-            return JsonSerializer.Deserialize<WalletResponse>((ReadOnlySpan<byte>)cachedData);
+            return JsonSerializer.Deserialize<WalletResponse>((ReadOnlySpan<byte>)cachedData!);
         }
 
         RecordCacheMiss();
@@ -44,8 +45,6 @@ public class RedisReadModelService : IRedisReadModelService
         var key = GetPortfolioKey(userId);
         var jsonData = JsonSerializer.Serialize(portfolio);
         
-        // Store the projection. In a real system, you might set an expiry, 
-        // but for an event-sourced read model, it lives as long as the state is valid.
         await _redisDb.StringSetAsync(key, jsonData);
     }
 
@@ -70,8 +69,43 @@ public class RedisReadModelService : IRedisReadModelService
         var jsonData = JsonSerializer.Serialize(orders);
         await _redisDb.StringSetAsync(key, jsonData);
     }
+
+    public async Task AddOpenOrderAsync(Guid userId, OpenOrderDto order, CancellationToken ct = default)
+    {
+        var key = GetOrdersKey(userId);
+        var cachedData = await _redisDb.StringGetAsync(key);
+
+        var orders = cachedData.HasValue 
+            ? JsonSerializer.Deserialize<List<OpenOrderDto>>((ReadOnlySpan<byte>)cachedData!) ?? new List<OpenOrderDto>()
+            : new List<OpenOrderDto>();
+
+        orders.Add(order);
+
+        var jsonData = JsonSerializer.Serialize(orders);
+        await _redisDb.StringSetAsync(key, jsonData);
+    }
+
+    public async Task RemoveOpenOrderAsync(Guid userId, Guid orderId, CancellationToken ct = default)
+    {
+        var key = GetOrdersKey(userId);
+        var cachedData = await _redisDb.StringGetAsync(key);
+
+        if (!cachedData.HasValue) return;
+
+        var orders = JsonSerializer.Deserialize<List<OpenOrderDto>>((ReadOnlySpan<byte>)cachedData!);
+        if (orders == null) return;
+
+        var initialCount = orders.Count;
+        orders.RemoveAll(o => o.Id == orderId); // Find and remove the target order
+
+        // Only incur the network write if something was actually removed
+        if (orders.Count != initialCount)
+        {
+            var jsonData = JsonSerializer.Serialize(orders);
+            await _redisDb.StringSetAsync(key, jsonData);
+        }
+    }
     
     public void RecordCacheHit() => _cacheHitCounter.Add(1);
     public void RecordCacheMiss() => _cacheMissCounter.Add(1);
-    private static string GetOrdersKey(Guid userId) => $"orders:open:{userId}";
 }

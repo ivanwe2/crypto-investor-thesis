@@ -1,6 +1,8 @@
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using TradeEngine.Application.DTOs.Order;
+using TradeEngine.Application.DTOs.Wallet;
 using TradeEngine.Application.Interfaces;
 using TradeEngine.Domain.Entities;
 using TradeEngine.Domain.Enums;
@@ -9,7 +11,9 @@ namespace TradeEngine.Application.Features.Orders.PlaceOrder;
 
 public class PlaceOrderCommandHandler(
     ITradeEngineDbContext dbContext,
-    IOrderIngressQueue ingressQueue) : IRequestHandler<PlaceOrderCommand, Result<OrderResponse>>
+    IOrderIngressQueue ingressQueue,
+    IRedisReadModelService redisService,
+    ILogger<PlaceOrderCommandHandler> logger) : IRequestHandler<PlaceOrderCommand, Result<OrderResponse>>
 {
     public async Task<Result<OrderResponse>> Handle(PlaceOrderCommand request, CancellationToken cancellationToken)
     {
@@ -51,6 +55,34 @@ public class PlaceOrderCommandHandler(
         dbContext.Orders.Add(order);
 
         await dbContext.SaveChangesAsync(cancellationToken);
+
+        try 
+        {
+            // Map the entity to the DTO expected by the UI
+            var orderDto = new OpenOrderDto(
+                order.Id,
+                order.Symbol,
+                order.Side.ToString(), 
+                order.Type.ToString(),
+                order.Quantity,
+                order.TargetPrice,
+                order.Status.ToString(), 
+                order.CreatedAt);
+                
+            // Instantly append to Redis
+            await redisService.AddOpenOrderAsync(request.UserId, orderDto, cancellationToken);
+
+            // Instantly update the locked Wallet funds in Redis
+            var balances = wallet.Balances.Select(b => new AssetBalanceDto(b.Currency, b.Amount)).ToList();
+            var walletResponse = new WalletResponse(wallet.Id, balances);
+            
+            await redisService.UpdateUserPortfolioAsync(request.UserId, walletResponse, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            // Swallow Redis exceptions so the user's order still succeeds.
+            logger.LogWarning(ex, "Failed to update Redis synchronously for order {OrderId}", order.Id);
+        }
 
         // Instantly push to the blazing fast RAM matcher
         ingressQueue.Writer.TryWrite(order);
