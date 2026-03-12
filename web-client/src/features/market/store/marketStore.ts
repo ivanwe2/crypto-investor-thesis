@@ -12,7 +12,8 @@ export const useMarketStore = create<MarketState>((set) => ({
     updateTicker: (data: TradeData) => set((state) => {
         const symbol = data.s;
         const price = Number(data.p);
-        const prevPrice = state.tickers[symbol]?.price || price;
+        const prevTicker = state.tickers[symbol];
+        const prevPrice = prevTicker?.price || price;
 
         let trend: 'up' | 'down' | 'neutral' = 'neutral';
         if (price > prevPrice) trend = 'up';
@@ -25,7 +26,8 @@ export const useMarketStore = create<MarketState>((set) => ({
                     symbol: symbol,
                     price: price,
                     timestamp: data.T,
-                    trend: trend
+                    trend: trend,
+                    volatility: data.v ?? prevTicker?.volatility ?? 0
                 }
             }
         };
