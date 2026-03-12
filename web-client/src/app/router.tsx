@@ -1,7 +1,10 @@
 import { createBrowserRouter } from "react-router-dom";
 import { AppLayout } from "../shared/components/layout/AppLayout";
-import { Dashboard } from "../features/market/components/Dashboard";
+import { Dashboard } from "../features/market/components/Dashboard/Dashboard";
 import { ProtectedRoute } from "../shared/components/layout/ProtectedRoute";
+import { PortfolioPage } from "../features/portfolio/components/Portfolio/PortfolioPage";
+import { MarketDetailPage } from "../features/market/components/MarketDetails/MarketDetails";
+import { OrdersPage } from "../features/trading/components/Orders/OrdersPage";
 
 export const router = createBrowserRouter([
   {
@@ -17,14 +20,18 @@ export const router = createBrowserRouter([
         children: [
           {
             path: "portfolio",
-            element: <div style={{ padding: "2rem" }}>Portfolio Page (Coming Soon)</div>,
+            element: <PortfolioPage />,
           },
           {
             path: "orders",
-            element: <div style={{ padding: "2rem" }}>Orders Page (Coming Soon)</div>,
-          }
-        ]
-      }
-    ]
-  }
+            element: <OrdersPage />,
+          },
+          {
+            path: "market/:symbol",
+            element: <MarketDetailPage />,
+          },
+        ],
+      },
+    ],
+  },
 ]);

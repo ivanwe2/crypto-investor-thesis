@@ -11,3 +11,14 @@ export interface OrderResponse {
     status: string;
     message: string;
 }
+
+export interface OpenOrderDto {
+    id: string;
+    symbol: string;
+    side: string;
+    type: string;
+    quantity: number;
+    targetPrice: number;
+    status: string;
+    createdAtUtc: string;
+}

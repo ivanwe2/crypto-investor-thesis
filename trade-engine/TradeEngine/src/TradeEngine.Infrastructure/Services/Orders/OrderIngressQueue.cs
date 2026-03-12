@@ -1,9 +1,10 @@
 using System.Threading.Channels;
+using TradeEngine.Application.Interfaces;
 using TradeEngine.Domain.Entities;
 
 namespace TradeEngine.Infrastructure.Services.Orders;
 
-public class OrderIngressQueue
+public class OrderIngressQueue : IOrderIngressQueue
 {
     private readonly Channel<Order> _queue;
 

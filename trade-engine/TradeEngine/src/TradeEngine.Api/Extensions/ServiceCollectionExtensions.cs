@@ -9,10 +9,12 @@ using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using Polly;
 using Polly.Extensions.Http;
+using StackExchange.Redis;
 using System.Text;
 using TradeEngine.Api.Middleware.ExceptionHandling;
 using TradeEngine.Api.Services;
 using TradeEngine.Application.Constants;
+using TradeEngine.Application.DTOs.Order;
 using TradeEngine.Application.Interfaces;
 using TradeEngine.Infrastructure.BackgroundServices.Messaging;
 using TradeEngine.Infrastructure.BackgroundServices.OrderMatching;
@@ -44,16 +46,25 @@ public static class ServiceCollectionExtensions
             });
         }, poolSize: 1024);
 
+        var redisConnectionString = configuration.GetConnectionString("Redis") ?? "redis:6379";
+        services.AddSingleton<IConnectionMultiplexer>(sp => ConnectionMultiplexer.Connect(redisConnectionString));
+        services.AddSingleton<IRedisReadModelService, RedisReadModelService>();
+
+        services.AddMediatR(cfg => cfg.RegisterServicesFromAssemblyContaining<PlaceOrderRequest>());
+
         services.AddMemoryCache();
         services.AddSingleton<IMarketStateCache, MarketStateCache>();
         services.AddSingleton<SettlementQueue>();
-        services.AddSingleton<OrderIngressQueue>();
+        services.AddSingleton<IOrderIngressQueue, OrderIngressQueue>();
         services.AddSingleton<IMessagePublisher, RabbitMqPublisher>();
         services.AddHostedService<RabbitMqListener>();
         services.AddHostedService<AiSignalListener>();
         services.AddHostedService<OrderMatchingWorker>();
         services.AddHostedService<TradeSettlementWorker>();
         services.AddHostedService<OutboxProcessorWorker>();
+
+        services.AddScoped<ITradeEngineDbContext>(provider => 
+            provider.GetRequiredService<TradeEngineDbContext>());
 
         services.AddGrpcClient<MarketDataService.MarketDataServiceClient>(options =>
         {
@@ -74,9 +85,6 @@ public static class ServiceCollectionExtensions
         })
         .AddPolicyHandler(GetRetryPolicy())
         .AddPolicyHandler(GetCircuitBreakerPolicy());
-
-        services.AddScoped<IOrderService, OrderService>();
-        services.AddScoped<IWalletService, WalletService>();
 
         return services;
 
@@ -216,6 +224,7 @@ public static class ServiceCollectionExtensions
                     .AddMeter("Microsoft.AspNetCore.Hosting")
                     .AddMeter("Microsoft.AspNetCore.Server.Kestrel")
                     .AddMeter("System.Net.Http")
+                    .AddMeter("TradeEngine.RedisCQRS")
                     .AddRuntimeInstrumentation()
                     .AddOtlpExporter(options =>
                     {
