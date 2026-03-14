@@ -21,6 +21,7 @@ public static class EndpointExtensions
         versionedGroup.MapAuthEndpoints();
         versionedGroup.MapOrderEndpoints();
         versionedGroup.MapWalletEndpoints();
+        versionedGroup.MapMarketEndpoints();
 
         // 4. Map infrastructure endpoints OUTSIDE the versioned group
         app.MapHealthChecks("/healthz");

@@ -15,6 +15,12 @@ service MarketDataService {
 
   // Unary: AI/Matching engine checks this before allowing a trade
   rpc GetVolatilityScore(VolatilityRequest) returns (VolatilityResponse);
+
+  // Unary: Fetch historical OHLCV data for Candlestick charting
+  rpc GetHistoricalKlines(KlinesRequest) returns (KlinesResponse);
+
+  // Unary: Fetch the current order book depth (bids and asks) for visual mapping
+  rpc GetOrderBookDepth(OrderBookRequest) returns (OrderBookResponse);
 }
 
 // --- Requests ---
@@ -30,6 +36,17 @@ message VolatilityRequest {
   string symbol = 1;
 }
 
+message KlinesRequest {
+  string symbol = 1;
+  string interval = 2; // e.g., "1m", "5m", "1h", "1d"
+  int32 limit = 3;     // Number of data points to return (e.g., 50)
+}
+
+message OrderBookRequest {
+  string symbol = 1;
+  int32 limit = 2; // e.g., 10 levels deep
+}
+
 // --- Responses ---
 message MarketSnapshot {
   string symbol        = 1;
@@ -42,4 +59,31 @@ message VolatilityResponse {
   string symbol     = 1;
   double volatility = 2;
   string regime     = 3; // "LOW", "NORMAL", "HIGH"
+}
+
+// --- Data Structures ---
+message Kline {
+  int64 start_time_utc = 1;
+  double open = 2;
+  double high = 3;
+  double low = 4;
+  double close = 5;
+  double volume = 6;
+}
+
+message KlinesResponse {
+  string symbol = 1;
+  repeated Kline klines = 2;
+}
+
+message OrderBookEntry {
+  double price = 1;
+  double size = 2;
+}
+
+message OrderBookResponse {
+  string symbol = 1;
+  repeated OrderBookEntry bids = 2;
+  repeated OrderBookEntry asks = 3;
+  int64 last_update_id = 4; // To keep sync with streams if needed
 }
