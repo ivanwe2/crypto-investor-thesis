@@ -1,14 +1,16 @@
-import { Outlet, Link, useLocation } from "react-router-dom";
+import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
 import { tokens, Text, Button, Avatar } from "@fluentui/react-components";
 import { Board24Regular, Board24Filled, Wallet24Regular, Wallet24Filled, DataArea24Regular, DataArea24Filled, WeatherMoon24Regular, WeatherSunny24Regular } from "@fluentui/react-icons";
 import { useThemeStore } from "../../store/themeStore";
 import { useAuthStore } from "../../../features/auth/store/authStore";
+import { ToastContainer } from "../toast/ToastContainer"; // Moved here!
 import styles from "./AppLayout.module.scss";
 
 export const AppLayout = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const { isDark, toggleTheme } = useThemeStore();
-  const { username } = useAuthStore();
+  const { username, token, logout } = useAuthStore();
 
   const navItems = [
     { path: "/", label: "Dashboard", activeIcon: <Board24Filled />, inactiveIcon: <Board24Regular /> },
@@ -41,14 +43,25 @@ export const AppLayout = () => {
           <Text size={400} weight="semibold" style={{ color: tokens.colorNeutralForeground3 }}>Trading Environment: Live</Text>
           <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
             
-            {/* ✨ Theme Toggle! */}
             <Button 
               appearance="transparent" 
               icon={isDark ? <WeatherSunny24Regular /> : <WeatherMoon24Regular />} 
               onClick={toggleTheme}
               title="Toggle Theme"
             />
-            <Avatar name={username || "Guest User"} badge={{ status: username ? "available" : "offline" }} />
+            
+            {/* Clean Auth Handling in Topbar */}
+            {token ? (
+              <div style={{ display: "flex", alignItems: "center", gap: "12px", cursor: "pointer" }} onClick={logout}>
+                <Avatar name={username || "User"} badge={{ status: "available" }} />
+                <Text size={200} weight="medium">Logout</Text>
+              </div>
+            ) : (
+              <Button appearance="primary" onClick={() => navigate('/login')}>
+                Sign In
+              </Button>
+            )}
+            
           </div>
         </header>
 
@@ -56,6 +69,9 @@ export const AppLayout = () => {
           <Outlet />
         </div>
       </main>
+      
+      {/* ✨ GLOBAL TOAST CONTAINER - Works on all pages now! */}
+      <ToastContainer />
     </div>
   );
 };

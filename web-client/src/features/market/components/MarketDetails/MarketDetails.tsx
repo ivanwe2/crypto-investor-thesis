@@ -38,7 +38,7 @@ export const MarketDetailPage = () => {
   const isHighVol = ticker.volatility > 10;
 
   const handleSymbolChange = (
-    e: any,
+    _: any,
     data: { optionValue: string | undefined },
   ) => {
     if (data.optionValue) {
@@ -131,7 +131,7 @@ export const MarketDetailPage = () => {
         }}
       >
         {/* LEFT: ORDER BOOK */}
-        <OrderBook currentPrice={ticker.price} />
+        <OrderBook currentPrice={ticker.price} symbol={ticker.symbol} />
 
         {/* MIDDLE: CHART */}
         <LivePriceChart symbol={symbol} currentPrice={ticker.price} />

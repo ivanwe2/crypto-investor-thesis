@@ -5,6 +5,8 @@ import {
   Button,
   Spinner,
   tokens,
+  makeStyles,
+  shorthands,
 } from "@fluentui/react-components";
 import {
   ArrowClockwise16Regular,
@@ -14,7 +16,74 @@ import { usePortfolioQuery } from "../../hooks/usePorfolioQuery";
 import { useMarketStore } from "../../../market/store/marketStore";
 import { PortfolioChart } from "./PortfolioChart";
 
+const useStyles = makeStyles({
+  pageWrapper: {
+    ...shorthands.padding("24px"),
+    display: "flex",
+    flexDirection: "column",
+    ...shorthands.gap("24px"),
+    maxWidth: "1200px",
+    ...shorthands.margin("0", "auto"),
+  },
+  headerSection: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-end",
+  },
+  valueContainer: {
+    display: "flex",
+    alignItems: "center",
+    ...shorthands.gap("12px"),
+    marginTop: "4px",
+  },
+  grid: {
+    display: "grid",
+    gridTemplateColumns: "2fr 1fr",
+    ...shorthands.gap("24px"),
+    alignItems: "start",
+    "@media (max-width: 1024px)": {
+      gridTemplateColumns: "1fr",
+    },
+  },
+  assetList: {
+    display: "flex",
+    flexDirection: "column",
+    ...shorthands.gap("16px"),
+  },
+  assetCard: {
+    backgroundColor: tokens.colorNeutralBackground1Hover,
+  },
+  assetRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  assetInfo: {
+    display: "flex",
+    alignItems: "center",
+    ...shorthands.gap("12px"),
+  },
+  iconWrapper: {
+    width: "40px",
+    height: "40px",
+    ...shorthands.borderRadius("50%"),
+    backgroundColor: tokens.colorBrandBackground2,
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  assetValues: {
+    textAlign: "right",
+  },
+  loadingWrapper: {
+    ...shorthands.padding("2rem"),
+    display: "flex",
+    justifyContent: "center",
+  }
+});
+
 export const PortfolioPage = () => {
+  const styles = useStyles();
   const { data: wallet, isLoading, isFetching, refetch } = usePortfolioQuery();
   const tickers = useMarketStore((state) => state.tickers);
 
@@ -43,59 +112,25 @@ export const PortfolioPage = () => {
 
   if (isLoading) {
     return (
-      <div
-        style={{ padding: "2rem", display: "flex", justifyContent: "center" }}
-      >
+      <div className={styles.loadingWrapper}>
         <Spinner size="large" label="Loading Redis Read Model..." />
       </div>
     );
   }
 
   return (
-    <div
-      style={{
-        padding: "24px",
-        display: "flex",
-        flexDirection: "column",
-        gap: "24px",
-        maxWidth: "1200px",
-        margin: "0 auto",
-      }}
-    >
+    <div className={styles.pageWrapper}>
       {/* HEADER SECTION */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-end",
-        }}
-      >
+      <div className={styles.headerSection}>
         <div>
-          <Text
-            size={500}
-            weight="semibold"
-            style={{ color: tokens.colorNeutralForeground3 }}
-          >
+          <Text size={500} weight="semibold" style={{ color: tokens.colorNeutralForeground3 }}>
             Total Portfolio Value
           </Text>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "12px",
-              marginTop: "4px",
-            }}
-          >
+          <div className={styles.valueContainer}>
             <Text size={1000} weight="bold">
-              $
-              {totalValue.toLocaleString(undefined, {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })}
+              ${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </Text>
-            {isFetching && (
-              <Spinner size="tiny" title="Fetching from Redis (~1ms)" />
-            )}
+            {isFetching && <Spinner size="tiny" title="Fetching from Redis (~1ms)" />}
           </div>
         </div>
 
@@ -109,22 +144,13 @@ export const PortfolioPage = () => {
         </Button>
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "2fr 1fr",
-          gap: "24px",
-          alignItems: "start",
-        }}
-      >
-        {/* LEFT COLUMN: CHART */}
-        <PortfolioChart currentValue={totalValue} />
+      <div className={styles.grid}>
+        {/* LEFT COLUMN: CHART - Now passing assets! */}
+        <PortfolioChart assets={assets} totalValue={totalValue} />
 
         {/* RIGHT COLUMN: ASSET BREAKDOWN */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-          <Text size={500} weight="semibold">
-            Asset Breakdown
-          </Text>
+        <div className={styles.assetList}>
+          <Text size={500} weight="semibold">Asset Breakdown</Text>
 
           {assets.length === 0 && (
             <Card>
@@ -133,42 +159,16 @@ export const PortfolioPage = () => {
           )}
 
           {assets.map((asset) => (
-            <Card
-              key={asset.currency}
-              style={{ backgroundColor: tokens.colorNeutralBackground1Hover }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
-                <div
-                  style={{ display: "flex", alignItems: "center", gap: "12px" }}
-                >
-                  <div
-                    style={{
-                      width: 40,
-                      height: 40,
-                      borderRadius: "50%",
-                      backgroundColor: tokens.colorBrandBackground2,
-                      display: "flex",
-                      justifyContent: "center",
-                      alignItems: "center",
-                    }}
-                  >
+            <Card key={asset.currency} className={styles.assetCard}>
+              <div className={styles.assetRow}>
+                <div className={styles.assetInfo}>
+                  <div className={styles.iconWrapper}>
                     <Wallet24Regular color={tokens.colorBrandForeground2} />
                   </div>
                   <div>
-                    <Text weight="bold" size={400}>
-                      {asset.currency}
-                    </Text>
+                    <Text weight="bold" size={400}>{asset.currency}</Text>
                     <br />
-                    <Text
-                      size={200}
-                      style={{ color: tokens.colorNeutralForeground3 }}
-                    >
+                    <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
                       {asset.currency !== "USDT" && asset.currentPrice > 0
                         ? `$${asset.currentPrice.toLocaleString()} per coin`
                         : "Stablecoin"}
@@ -176,23 +176,13 @@ export const PortfolioPage = () => {
                   </div>
                 </div>
 
-                <div style={{ textAlign: "right" }}>
+                <div className={styles.assetValues}>
                   <Text weight="semibold" size={400}>
-                    $
-                    {asset.valueInUsd.toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
+                    ${asset.valueInUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </Text>
                   <br />
-                  <Text
-                    size={200}
-                    style={{ color: tokens.colorNeutralForeground3 }}
-                  >
-                    {asset.amount.toLocaleString(undefined, {
-                      maximumFractionDigits: 6,
-                    })}{" "}
-                    {asset.currency}
+                  <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+                    {asset.amount.toLocaleString(undefined, { maximumFractionDigits: 6 })} {asset.currency}
                   </Text>
                 </div>
               </div>

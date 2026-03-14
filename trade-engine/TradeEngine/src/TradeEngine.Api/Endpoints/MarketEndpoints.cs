@@ -6,7 +6,7 @@ namespace TradeEngine.Api.Endpoints
     {
         public static void MapMarketEndpoints(this IEndpointRouteBuilder app)
         {
-            var group = app.MapGroup("/api/markets").WithTags("Market Data");
+            var group = app.MapGroup("/markets").WithTags("Market Data");
 
             // 1. Fetch Candlestick Data (HTTP GET -> gRPC -> Go)
             group.MapGet("/{symbol}/klines", async (

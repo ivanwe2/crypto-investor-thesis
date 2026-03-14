@@ -5,6 +5,7 @@ import { ProtectedRoute } from "../shared/components/layout/ProtectedRoute";
 import { PortfolioPage } from "../features/portfolio/components/Portfolio/PortfolioPage";
 import { MarketDetailPage } from "../features/market/components/MarketDetails/MarketDetails";
 import { OrdersPage } from "../features/trading/components/Orders/OrdersPage";
+import { AuthPage } from "../features/auth/components/AuthPage";
 
 export const router = createBrowserRouter([
   {
@@ -15,6 +16,7 @@ export const router = createBrowserRouter([
         index: true,
         element: <Dashboard />,
       },
+      
       {
         element: <ProtectedRoute />,
         children: [
@@ -32,6 +34,10 @@ export const router = createBrowserRouter([
           },
         ],
       },
+      {
+        element: <AuthPage />,
+        path: "login"
+      }
     ],
   },
 ]);
