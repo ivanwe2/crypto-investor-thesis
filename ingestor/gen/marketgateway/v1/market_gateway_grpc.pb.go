@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.6.1
 // - protoc             v7.34.0
-// source: proto/market_gateway.proto
+// source: market_gateway.proto
 
 package v1
 
@@ -19,9 +19,11 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	MarketDataService_GetMarketSnapshot_FullMethodName  = "/marketgateway.v1.MarketDataService/GetMarketSnapshot"
-	MarketDataService_StreamMarketData_FullMethodName   = "/marketgateway.v1.MarketDataService/StreamMarketData"
-	MarketDataService_GetVolatilityScore_FullMethodName = "/marketgateway.v1.MarketDataService/GetVolatilityScore"
+	MarketDataService_GetMarketSnapshot_FullMethodName   = "/marketgateway.v1.MarketDataService/GetMarketSnapshot"
+	MarketDataService_StreamMarketData_FullMethodName    = "/marketgateway.v1.MarketDataService/StreamMarketData"
+	MarketDataService_GetVolatilityScore_FullMethodName  = "/marketgateway.v1.MarketDataService/GetVolatilityScore"
+	MarketDataService_GetHistoricalKlines_FullMethodName = "/marketgateway.v1.MarketDataService/GetHistoricalKlines"
+	MarketDataService_GetOrderBookDepth_FullMethodName   = "/marketgateway.v1.MarketDataService/GetOrderBookDepth"
 )
 
 // MarketDataServiceClient is the client API for MarketDataService service.
@@ -36,6 +38,10 @@ type MarketDataServiceClient interface {
 	StreamMarketData(ctx context.Context, in *StreamRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[MarketSnapshot], error)
 	// Unary: AI/Matching engine checks this before allowing a trade
 	GetVolatilityScore(ctx context.Context, in *VolatilityRequest, opts ...grpc.CallOption) (*VolatilityResponse, error)
+	// Unary: Fetch historical OHLCV data for Candlestick charting
+	GetHistoricalKlines(ctx context.Context, in *KlinesRequest, opts ...grpc.CallOption) (*KlinesResponse, error)
+	// Unary: Fetch the current order book depth (bids and asks) for visual mapping
+	GetOrderBookDepth(ctx context.Context, in *OrderBookRequest, opts ...grpc.CallOption) (*OrderBookResponse, error)
 }
 
 type marketDataServiceClient struct {
@@ -85,6 +91,26 @@ func (c *marketDataServiceClient) GetVolatilityScore(ctx context.Context, in *Vo
 	return out, nil
 }
 
+func (c *marketDataServiceClient) GetHistoricalKlines(ctx context.Context, in *KlinesRequest, opts ...grpc.CallOption) (*KlinesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(KlinesResponse)
+	err := c.cc.Invoke(ctx, MarketDataService_GetHistoricalKlines_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *marketDataServiceClient) GetOrderBookDepth(ctx context.Context, in *OrderBookRequest, opts ...grpc.CallOption) (*OrderBookResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(OrderBookResponse)
+	err := c.cc.Invoke(ctx, MarketDataService_GetOrderBookDepth_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MarketDataServiceServer is the server API for MarketDataService service.
 // All implementations must embed UnimplementedMarketDataServiceServer
 // for forward compatibility.
@@ -97,6 +123,10 @@ type MarketDataServiceServer interface {
 	StreamMarketData(*StreamRequest, grpc.ServerStreamingServer[MarketSnapshot]) error
 	// Unary: AI/Matching engine checks this before allowing a trade
 	GetVolatilityScore(context.Context, *VolatilityRequest) (*VolatilityResponse, error)
+	// Unary: Fetch historical OHLCV data for Candlestick charting
+	GetHistoricalKlines(context.Context, *KlinesRequest) (*KlinesResponse, error)
+	// Unary: Fetch the current order book depth (bids and asks) for visual mapping
+	GetOrderBookDepth(context.Context, *OrderBookRequest) (*OrderBookResponse, error)
 	mustEmbedUnimplementedMarketDataServiceServer()
 }
 
@@ -115,6 +145,12 @@ func (UnimplementedMarketDataServiceServer) StreamMarketData(*StreamRequest, grp
 }
 func (UnimplementedMarketDataServiceServer) GetVolatilityScore(context.Context, *VolatilityRequest) (*VolatilityResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetVolatilityScore not implemented")
+}
+func (UnimplementedMarketDataServiceServer) GetHistoricalKlines(context.Context, *KlinesRequest) (*KlinesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetHistoricalKlines not implemented")
+}
+func (UnimplementedMarketDataServiceServer) GetOrderBookDepth(context.Context, *OrderBookRequest) (*OrderBookResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetOrderBookDepth not implemented")
 }
 func (UnimplementedMarketDataServiceServer) mustEmbedUnimplementedMarketDataServiceServer() {}
 func (UnimplementedMarketDataServiceServer) testEmbeddedByValue()                           {}
@@ -184,6 +220,42 @@ func _MarketDataService_GetVolatilityScore_Handler(srv interface{}, ctx context.
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MarketDataService_GetHistoricalKlines_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(KlinesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MarketDataServiceServer).GetHistoricalKlines(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MarketDataService_GetHistoricalKlines_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MarketDataServiceServer).GetHistoricalKlines(ctx, req.(*KlinesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MarketDataService_GetOrderBookDepth_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(OrderBookRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MarketDataServiceServer).GetOrderBookDepth(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MarketDataService_GetOrderBookDepth_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MarketDataServiceServer).GetOrderBookDepth(ctx, req.(*OrderBookRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MarketDataService_ServiceDesc is the grpc.ServiceDesc for MarketDataService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -199,6 +271,14 @@ var MarketDataService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "GetVolatilityScore",
 			Handler:    _MarketDataService_GetVolatilityScore_Handler,
 		},
+		{
+			MethodName: "GetHistoricalKlines",
+			Handler:    _MarketDataService_GetHistoricalKlines_Handler,
+		},
+		{
+			MethodName: "GetOrderBookDepth",
+			Handler:    _MarketDataService_GetOrderBookDepth_Handler,
+		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
@@ -207,5 +287,5 @@ var MarketDataService_ServiceDesc = grpc.ServiceDesc{
 			ServerStreams: true,
 		},
 	},
-	Metadata: "proto/market_gateway.proto",
+	Metadata: "market_gateway.proto",
 }
