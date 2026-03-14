@@ -1,8 +1,40 @@
-import { tokens } from '@fluentui/react-components';
-import { useNotificationStore } from '../../store/notificationStore';
-import styles from './ToastContainer.module.scss';
+import { tokens, makeStyles, shorthands } from '@fluentui/react-components';
+import { useNotificationStore } from '../../../shared/store/notificationStore';
+
+const useStyles = makeStyles({
+    container: {
+        position: 'fixed',
+        bottom: '20px',
+        right: '20px',
+        display: 'flex',
+        flexDirection: 'column',
+        ...shorthands.gap('10px'),
+        zIndex: 9999,
+    },
+    toast: {
+        ...shorthands.padding('15px', '20px'),
+        ...shorthands.borderRadius('8px'),
+        ...shorthands.border('1px', 'solid'),
+        boxShadow: tokens.shadow16,
+        cursor: 'pointer',
+        maxWidth: '350px',
+        fontSize: '0.95rem',
+        fontWeight: 600,
+        transitionProperty: 'all',
+        transitionDuration: '0.3s',
+        transitionTimingFunction: 'ease-in-out',
+        animationName: {
+            from: { opacity: 0, transform: 'translateX(100%)' },
+            to: { opacity: 1, transform: 'translateX(0)' }
+        },
+        animationDuration: '0.3s',
+        animationTimingFunction: 'ease-out',
+        animationFillMode: 'forwards'
+    }
+});
 
 export const ToastContainer = () => {
+    const styles = useStyles();
     const { notifications, removeNotification } = useNotificationStore();
 
     if (notifications.length === 0) return null;
@@ -10,7 +42,6 @@ export const ToastContainer = () => {
     return (
         <div className={styles.container}>
             {notifications.map((toast) => {
-                // Map the toast types to Fluent UI Dark Theme tokens
                 let bgColor = tokens.colorNeutralBackground3;
                 let fgColor = tokens.colorNeutralForeground1;
                 let borderColor = tokens.colorNeutralStroke1;
@@ -23,8 +54,7 @@ export const ToastContainer = () => {
                     bgColor = tokens.colorPaletteRedBackground1;
                     fgColor = tokens.colorPaletteRedForeground1;
                     borderColor = tokens.colorPaletteRedBorder2;
-                }else if (toast.type === 'ai') {
-                    // ✨ NEW: AI Styling! Deep Plum/Purple colors native to Fluent UI
+                } else if (toast.type === 'ai') {
                     bgColor = tokens.colorPalettePlumBackground2;
                     fgColor = tokens.colorPalettePlumForeground2;
                     borderColor = tokens.colorPalettePlumBorderActive;
@@ -38,12 +68,10 @@ export const ToastContainer = () => {
                             backgroundColor: bgColor,
                             color: fgColor,
                             borderColor: borderColor,
-                            // If it's AI, add a cool subtle glow effect!
-                            boxShadow: toast.type === 'ai' ? `0 4px 15px ${tokens.colorPalettePlumBackground2}` : '0 4px 12px rgba(0,0,0,0.15)'
+                            boxShadow: toast.type === 'ai' ? `0 4px 15px ${tokens.colorPalettePlumBackground2}` : tokens.shadow16
                         }}
                         onClick={() => removeNotification(toast.id)}
                     >
-                        {/* If you want multi-line text (for the AI reason), white-space pre-line fixes it */}
                         <span style={{ whiteSpace: 'pre-line' }}>{toast.message}</span>
                     </div>
                 );

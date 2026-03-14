@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Card, CardHeader, Text, tokens, Spinner, makeStyles } from "@fluentui/react-components";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { marketService } from "../../../market/services/marketService";
@@ -21,93 +21,102 @@ const useStyles = makeStyles({
   }
 });
 
-// We accept the enriched assets array from the PortfolioPage
 export const PortfolioChart = ({ assets, totalValue }: { assets: any[], totalValue: number }) => {
   const styles = useStyles();
-  const [data, setData] = useState<any[]>([]);
+  const [rawKlines, setRawKlines] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
+  // 1. Create a simple string key of what's in the wallet (e.g., "BTC,ETH"). 
+  // We use THIS to trigger the API call, ignoring price fluctuations.
+  const walletCompositionKey = useMemo(() => {
+    return assets
+      .filter(a => a.currency !== 'USDT' && a.currency !== 'USD')
+      .map(a => a.currency)
+      .sort()
+      .join(',');
+  }, [assets]); // We only map the symbols here.
+
+  // 2. Fetch Historical Data ONLY when the wallet composition (the coins you own) changes
   useEffect(() => {
     let isMounted = true;
 
-    const buildHistoricalData = async () => {
-      if (!assets || assets.length === 0 || totalValue === 0) {
-        setData([]);
+    const fetchHistoricalData = async () => {
+      if (!walletCompositionKey) {
+        setRawKlines([]);
         return;
       }
 
       setIsLoading(true);
       try {
-        // 1. Separate Stablecoins (flat value) from Volatile Crypto
-        const stableCoins = assets.filter(a => a.currency === 'USDT' || a.currency === 'USD');
-        const stableValue = stableCoins.reduce((sum, a) => sum + a.amount, 0);
-        const volatileAssets = assets.filter(a => a.currency !== 'USDT' && a.currency !== 'USD');
-
-        // If user only holds USDT, just draw a flat line
-        if (volatileAssets.length === 0) {
-          const flatData = [];
-          const now = new Date();
-          for(let i=30; i>=0; i--) {
-              const d = new Date(now);
-              d.setDate(d.getDate() - i);
-              flatData.push({ date: d.toLocaleDateString(undefined, { month: "short", day: "numeric" }), value: stableValue });
-          }
-          if (isMounted) setData(flatData);
-          return;
-        }
-
-        // 2. Fetch 30-day "1d" Klines for all volatile assets concurrently
-        const promises = volatileAssets.map(asset =>
-          marketService.getHistoricalKlines(`${asset.currency}USDT`, "1d", 30)
-            .then(res => ({ currency: asset.currency, amount: asset.amount, klines: res.klines }))
+        const currencies = walletCompositionKey.split(',');
+        const promises = currencies.map(currency =>
+          marketService.getHistoricalKlines(`${currency}USDT`, "1d", 30)
+            .then(res => ({ currency, klines: res.klines }))
             .catch(err => {
-              console.warn(`Failed to fetch klines for ${asset.currency}`, err);
-              return null; // Ignore failed pairs safely
+              console.warn(`Failed to fetch klines for ${currency}`, err);
+              return null; 
             })
         );
 
         const results = await Promise.all(promises);
-        const validResults = results.filter(r => r !== null) as any[];
-
-        if (!isMounted) return;
-
-        // 3. Aggregate the data by day
-        if (validResults.length > 0 && validResults[0].klines.length > 0) {
-          // Use the first successful asset's timeline as our baseline calendar
-          const aggregatedData = validResults[0].klines.map((baseKline: any, index: number) => {
-            let dailyTotal = stableValue; // Start with the cash baseline
-
-            // Add the historical value of each volatile asset on this specific day
-            validResults.forEach(result => {
-              const klineForDay = result.klines[index];
-              if (klineForDay) {
-                dailyTotal += (result.amount * klineForDay.close); // Amount * Daily Close Price
-              }
-            });
-
-            return {
-              date: new Date(baseKline.startTimeUtc * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
-              value: dailyTotal
-            };
-          });
-
-          // 4. Overwrite the final day with real-time totalValue from SignalR
-          if (aggregatedData.length > 0) {
-             aggregatedData[aggregatedData.length - 1].value = totalValue;
-          }
-
-          setData(aggregatedData);
-        }
+        if (isMounted) setRawKlines(results.filter(r => r !== null));
       } catch (error) {
-        console.error("Failed to build portfolio chart:", error);
+        console.error("Failed to fetch historical portfolio data:", error);
       } finally {
         if (isMounted) setIsLoading(false);
       }
     };
 
-    buildHistoricalData();
+    fetchHistoricalData();
     return () => { isMounted = false; };
-  }, [assets, totalValue]); // Re-calculate if wallet composition changes
+  }, [walletCompositionKey]); // <--- THIS PREVENTS THE INFINITE LOOP!
+
+  // 3. Compute final chart math instantly in RAM every time SignalR updates the price
+  const chartData = useMemo(() => {
+    if (assets.length === 0 || totalValue === 0) return [];
+
+    const stableCoins = assets.filter(a => a.currency === 'USDT' || a.currency === 'USD');
+    const stableValue = stableCoins.reduce((sum, a) => sum + a.amount, 0);
+
+    // Fallback: If no klines loaded yet, just draw a flat line of current value
+    if (rawKlines.length === 0) {
+        const flatData = [];
+        const now = new Date();
+        for(let i=30; i>=0; i--) {
+            const d = new Date(now);
+            d.setDate(d.getDate() - i);
+            flatData.push({ date: d.toLocaleDateString(undefined, { month: "short", day: "numeric" }), value: stableValue });
+        }
+        flatData[flatData.length - 1].value = totalValue;
+        return flatData;
+    }
+
+    // Aggregate Historical Klines * Current Holdings
+    const baseKlines = rawKlines[0].klines;
+    const aggregated = baseKlines.map((baseKline: any, index: number) => {
+      let dailyTotal = stableValue; 
+
+      rawKlines.forEach(rawAssetKlines => {
+        const klineForDay = rawAssetKlines.klines[index];
+        const currentWalletAsset = assets.find(a => a.currency === rawAssetKlines.currency);
+        if (klineForDay && currentWalletAsset) {
+          dailyTotal += (currentWalletAsset.amount * klineForDay.close);
+        }
+      });
+
+      return {
+        date: new Date(baseKline.startTimeUtc * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+        value: dailyTotal
+      };
+    });
+
+    // ✨ Overwrite the final day's dot with the absolute latest real-time SignalR value!
+    if (aggregated.length > 0) {
+       aggregated[aggregated.length - 1].value = totalValue;
+    }
+
+    return aggregated;
+  }, [rawKlines, assets, totalValue]); // Updates smoothly in memory on every SignalR tick
 
   return (
     <Card className={styles.card}>
@@ -124,9 +133,9 @@ export const PortfolioChart = ({ assets, totalValue }: { assets: any[], totalVal
            <div className={styles.centerState}>
              <Spinner label="Aggregating market data..." />
            </div>
-        ) : data.length > 0 ? (
+        ) : chartData.length > 0 ? (
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+            <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor={tokens.colorBrandBackground} stopOpacity={0.3} />
@@ -141,7 +150,7 @@ export const PortfolioChart = ({ assets, totalValue }: { assets: any[], totalVal
                 itemStyle={{ color: tokens.colorNeutralForeground1 }}
                 formatter={(value: any) => [`$${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, "Value"]}
               />
-              <Area type="monotone" dataKey="value" stroke={tokens.colorBrandBackground} fillOpacity={1} fill="url(#colorValue)" strokeWidth={3} isAnimationActive={true} />
+              <Area type="monotone" dataKey="value" stroke={tokens.colorBrandBackground} fillOpacity={1} fill="url(#colorValue)" strokeWidth={3} isAnimationActive={false} />
             </AreaChart>
           </ResponsiveContainer>
         ) : (

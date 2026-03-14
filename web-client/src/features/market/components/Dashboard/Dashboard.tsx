@@ -10,9 +10,13 @@ import {
   tokens,
   Spinner,
   makeStyles,
-  shorthands
+  shorthands,
 } from "@fluentui/react-components";
-import { Dismiss16Regular, Add16Regular, ArrowTrendingLines24Regular } from "@fluentui/react-icons";
+import {
+  Dismiss16Regular,
+  Add16Regular,
+  ArrowTrendingLines24Regular,
+} from "@fluentui/react-icons";
 import { signalRService } from "../../../../shared/services/signalRService";
 import { useMarketStore } from "../../store/marketStore";
 import { useAuthStore } from "../../../auth/store/authStore";
@@ -69,13 +73,13 @@ const useStyles = makeStyles({
     ...shorthands.gap("24px"),
     position: "sticky",
     top: "24px",
-  }
+  },
 });
 
 export const Dashboard = () => {
   const styles = useStyles();
   const navigate = useNavigate();
-  
+
   const token = useAuthStore((state) => state.token);
   const tickers = useMarketStore((state) => state.tickers);
   const { symbols: watchList, addSymbol, removeSymbol } = useWatchlistStore();
@@ -106,8 +110,9 @@ export const Dashboard = () => {
 
       <div className={styles.grid}>
         <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-          
-          <Card style={{ backgroundColor: tokens.colorNeutralBackground1Hover }}>
+          <Card
+            style={{ backgroundColor: tokens.colorNeutralBackground1Hover }}
+          >
             <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
               <Input
                 value={newSymbol}
@@ -116,7 +121,11 @@ export const Dashboard = () => {
                 style={{ flex: 1 }}
                 onKeyDown={(e) => e.key === "Enter" && handleAddSymbol()}
               />
-              <Button icon={<Add16Regular />} appearance="primary" onClick={handleAddSymbol}>
+              <Button
+                icon={<Add16Regular />}
+                appearance="primary"
+                onClick={handleAddSymbol}
+              >
                 Add Coin
               </Button>
             </div>
@@ -131,10 +140,16 @@ export const Dashboard = () => {
                   <Card key={symbol} className={styles.tickerCardEmpty}>
                     <CardHeader
                       action={
-                        <Button icon={<Dismiss16Regular />} appearance="transparent" onClick={() => removeSymbol(symbol)} />
+                        <Button
+                          icon={<Dismiss16Regular />}
+                          appearance="transparent"
+                          onClick={() => removeSymbol(symbol)}
+                        />
                       }
                     />
-                    <Text size={400} weight="semibold">{symbol}</Text>
+                    <Text size={400} weight="semibold">
+                      {symbol}
+                    </Text>
                     <Spinner size="tiny" label="Connecting..." />
                   </Card>
                 );
@@ -147,24 +162,46 @@ export const Dashboard = () => {
                 <Card
                   key={symbol}
                   className={styles.tickerCard}
-                  style={{ backgroundColor: tokens.colorNeutralBackground1Hover }}
+                  style={{
+                    backgroundColor: tokens.colorNeutralBackground1Hover,
+                  }}
                   onClick={() => navigate(`/market/${symbol}`)}
                 >
                   <CardHeader
-                    header={<Text weight="semibold" size={500}>{symbol}</Text>}
+                    header={
+                      <Text weight="semibold" size={500}>
+                        {symbol}
+                      </Text>
+                    }
                     description={
-                      <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+                      <Text
+                        size={200}
+                        style={{ color: tokens.colorNeutralForeground3 }}
+                      >
                         {new Date(ticker.timestamp).toLocaleTimeString()}
                       </Text>
                     }
                     action={
-                      <div style={{ display: "flex", gap: "4px" }} onClick={(e) => e.stopPropagation()}>
+                      // ✨ FIXED: Added alignItems: "center" to perfectly align Badge and Button
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: "8px",
+                          alignItems: "center",
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <Badge
                           appearance="tint"
                           shape="rounded"
-                          color={isUp ? "success" : isDown ? "danger" : "informative"}
+                          color={
+                            isUp ? "success" : isDown ? "danger" : "informative"
+                          }
+                          style={{
+                            minWidth: "85px",
+                          }}
                         >
-                          {isUp ? "▲" : isDown ? "▼" : "−"} {ticker.trend.toUpperCase()}
+                          {isUp ? "▲" : isDown ? "▼" : "−"}{" "}{ticker.trend.toUpperCase()}
                         </Badge>
                         <Button
                           icon={<Dismiss16Regular />}
@@ -174,19 +211,39 @@ export const Dashboard = () => {
                       </div>
                     }
                   />
-                  
-                  <div style={{ marginTop: "12px", display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+
+                  <div
+                    style={{
+                      marginTop: "16px",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "flex-end",
+                    }}
+                  >
                     <Text
                       size={800}
                       weight="bold"
                       style={{
-                        color: isUp ? tokens.colorPaletteGreenForeground1 : isDown ? tokens.colorPaletteRedForeground1 : tokens.colorNeutralForeground1,
+                        color: isUp
+                          ? tokens.colorPaletteGreenForeground1
+                          : isDown
+                            ? tokens.colorPaletteRedForeground1
+                            : tokens.colorNeutralForeground1,
                       }}
                     >
-                      ${ticker.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                      $
+                      {ticker.price.toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 4,
+                      })}
                     </Text>
-                    
-                    <Button icon={<ArrowTrendingLines24Regular />} appearance="subtle">Trade</Button>
+
+                    <Button
+                      icon={<ArrowTrendingLines24Regular />}
+                      appearance="subtle"
+                    >
+                      Trade
+                    </Button>
                   </div>
                 </Card>
               );

@@ -1,25 +1,79 @@
-import { Card, CardHeader, Spinner, tokens, Text } from "@fluentui/react-components";
+import { Card, CardHeader, Spinner, tokens, Text, makeStyles, shorthands } from "@fluentui/react-components";
 import { useEffect, useState, useMemo } from "react";
 import { marketService } from "../../services/marketService";
 import type { OrderBookEntryDto } from "../../models/Dtos";
 
+// ✨ Griffel CSS-in-JS styling for deep pseudo-element control
+const useStyles = makeStyles({
+  card: {
+    backgroundColor: tokens.colorNeutralBackground1Hover,
+    height: "400px",
+    display: "flex",
+    flexDirection: "column",
+  },
+  centerState: {
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    flexGrow: 1,
+  },
+  columnHeaders: {
+    display: "flex",
+    justifyContent: "space-between",
+    ...shorthands.padding("0", "8px"),
+    color: tokens.colorNeutralForeground3,
+    fontSize: "12px",
+    marginTop: "8px",
+  },
+  scrollArea: {
+    display: "flex",
+    flexDirection: "column",
+    ...shorthands.gap("2px"),
+    marginTop: "4px",
+    fontFamily: "monospace",
+    flexGrow: 1,
+    overflowY: "auto",
+    overflowX: "hidden",
+    // ✨ Cross-browser Scrollbar Hiding!
+    scrollbarWidth: "none", // Firefox
+    msOverflowStyle: "none", // IE/Edge
+    "::-webkit-scrollbar": {
+      display: "none", // Chrome/Safari
+    },
+  },
+  depthRow: {
+    position: "relative",
+    ...shorthands.padding("2px", "8px"),
+    display: "flex",
+    justifyContent: "space-between",
+  },
+  spreadDivider: {
+    textAlign: "center",
+    ...shorthands.margin("8px", "0"),
+    ...shorthands.padding("8px", "0"),
+    backgroundColor: tokens.colorNeutralBackground2,
+    fontSize: "16px",
+    fontWeight: "bold",
+    color: tokens.colorBrandForeground1,
+    ...shorthands.borderTop("1px", "solid", tokens.colorNeutralStroke1),
+    ...shorthands.borderBottom("1px", "solid", tokens.colorNeutralStroke1),
+  }
+});
+
 export const OrderBook = ({ currentPrice, symbol }: { currentPrice: number, symbol: string }) => {
+  const styles = useStyles();
   const [asks, setAsks] = useState<OrderBookEntryDto[]>([]);
   const [bids, setBids] = useState<OrderBookEntryDto[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Initial Load: Fetch Depth Snapshot via REST
   useEffect(() => {
     let isMounted = true;
-    
     const fetchOrderBookSnapshot = async () => {
       try {
         setIsLoading(true);
         const data = await marketService.getOrderBookDepth(symbol, 12);
         if (isMounted) {
-          // Asks are typically returned ascending. We reverse them so the lowest price is near the spread center.
           setAsks([...data.asks].sort((a, b) => b.price - a.price));
-          // Bids are typically returned descending. Highest price near the center.
           setBids([...data.bids].sort((a, b) => b.price - a.price));
         }
       } catch (error) {
@@ -28,9 +82,7 @@ export const OrderBook = ({ currentPrice, symbol }: { currentPrice: number, symb
         if (isMounted) setIsLoading(false);
       }
     };
-
     fetchOrderBookSnapshot();
-
     return () => { isMounted = false; };
   }, [symbol]);
 
@@ -41,27 +93,26 @@ export const OrderBook = ({ currentPrice, symbol }: { currentPrice: number, symb
   }, [asks, bids]);
 
   return (
-    <Card style={{ backgroundColor: tokens.colorNeutralBackground1Hover, height: 400 }}>
+    <Card className={styles.card}>
       <CardHeader header={<Text weight="semibold" size={500}>Order Book Depth</Text>} />
       
       {isLoading ? (
-        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100%" }}>
+        <div className={styles.centerState}>
            <Spinner size="small" label="Loading depth..." />
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", padding: "0 8px", color: tokens.colorNeutralForeground3, fontSize: "12px", marginTop: "8px" }}>
+        <>
+          <div className={styles.columnHeaders}>
             <span>Price</span>
             <span>Size</span>
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: "2px", marginTop: "4px", fontFamily: "monospace", flex: 1, overflowY: "auto", overflowX: "hidden" }}>
-            
-            {/* ASKS (Red, descending) */}
+          <div className={styles.scrollArea}>
+            {/* ASKS */}
             {asks.map((ask, i) => {
               const depthPercent = (ask.size / maxSize) * 100;
               return (
-                <div key={`ask-${i}`} style={{ position: "relative", padding: "2px 8px", display: "flex", justifyContent: "space-between" }}>
+                <div key={`ask-${i}`} className={styles.depthRow}>
                   <div style={{
                     position: "absolute", right: 0, top: 0, bottom: 0,
                     width: `${depthPercent}%`,
@@ -75,26 +126,16 @@ export const OrderBook = ({ currentPrice, symbol }: { currentPrice: number, symb
               );
             })}
 
-            {/* SPREAD / SIGNALR CURRENT PRICE */}
-            <div style={{ 
-              textAlign: "center", 
-              margin: "8px 0", 
-              padding: "8px 0", 
-              backgroundColor: tokens.colorNeutralBackground2, 
-              fontSize: "16px", 
-              fontWeight: "bold", 
-              color: tokens.colorBrandForeground1, // Highlight color
-              borderTop: `1px solid ${tokens.colorNeutralStroke1}`, 
-              borderBottom: `1px solid ${tokens.colorNeutralStroke1}` 
-            }}>
+            {/* SPREAD */}
+            <div className={styles.spreadDivider}>
               ${currentPrice ? currentPrice.toLocaleString() : '---'}
             </div>
 
-            {/* BIDS (Green, descending) */}
+            {/* BIDS */}
             {bids.map((bid, i) => {
               const depthPercent = (bid.size / maxSize) * 100;
               return (
-                <div key={`bid-${i}`} style={{ position: "relative", padding: "2px 8px", display: "flex", justifyContent: "space-between" }}>
+                <div key={`bid-${i}`} className={styles.depthRow}>
                   <div style={{
                     position: "absolute", right: 0, top: 0, bottom: 0,
                     width: `${depthPercent}%`,
@@ -108,7 +149,7 @@ export const OrderBook = ({ currentPrice, symbol }: { currentPrice: number, symb
               );
             })}
           </div>
-        </div>
+        </>
       )}
     </Card>
   );
