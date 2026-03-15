@@ -1,11 +1,10 @@
-# Variables to make it easy to change things later
 APP_NAME = ingestor
 MAIN_FILE = cmd/server/main.go
 
+.PHONY: all build run test clean proto docker
+
 # 'all' is the default target if you just type 'make'
 all: build
-
-## 🔨 BUILD & RUN
 
 # Compiles the code and puts the executable in a 'bin' folder
 build:
@@ -15,8 +14,6 @@ build:
 run:
 	go run $(MAIN_FILE)
 
-## 🧪 TESTING & CLEANUP
-
 # Runs all tests in the project
 test:
 	go test -v ./...
@@ -24,8 +21,6 @@ test:
 # Removes the compiled binary folder
 clean:
 	rm -rf bin/
-
-## 📦 EXTRAS (Based on your folder structure)
 
 # Generates the Go code from your proto file
 proto:
