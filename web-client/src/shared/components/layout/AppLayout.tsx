@@ -1,19 +1,34 @@
-import { Outlet, Link, useLocation } from "react-router-dom";
+import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
 import { tokens, Text, Button, Avatar } from "@fluentui/react-components";
-import { Board24Regular, Board24Filled, Wallet24Regular, Wallet24Filled, DataArea24Regular, DataArea24Filled, WeatherMoon24Regular, WeatherSunny24Regular } from "@fluentui/react-icons";
+import { 
+  Board24Regular, 
+  Board24Filled, 
+  Wallet24Regular, 
+  Wallet24Filled, 
+  DataArea24Regular, 
+  DataArea24Filled, 
+  WeatherMoon24Regular, 
+  WeatherSunny24Regular,
+  HeartPulse24Regular,
+  HeartPulse24Filled
+} from "@fluentui/react-icons";
 import { useThemeStore } from "../../store/themeStore";
 import { useAuthStore } from "../../../features/auth/store/authStore";
+import { ToastContainer } from "../toast/ToastContainer"; 
 import styles from "./AppLayout.module.scss";
 
 export const AppLayout = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const { isDark, toggleTheme } = useThemeStore();
-  const { username } = useAuthStore();
+  
+  const { username, token, logout, isAdmin } = useAuthStore();
 
   const navItems = [
-    { path: "/", label: "Dashboard", activeIcon: <Board24Filled />, inactiveIcon: <Board24Regular /> },
-    { path: "/portfolio", label: "Portfolio", activeIcon: <Wallet24Filled />, inactiveIcon: <Wallet24Regular /> },
-    { path: "/orders", label: "Orders", activeIcon: <DataArea24Filled />, inactiveIcon: <DataArea24Regular /> },
+    { path: "/", label: "Dashboard", activeIcon: <Board24Filled />, inactiveIcon: <Board24Regular />, show: true },
+    { path: "/portfolio", label: "Portfolio", activeIcon: <Wallet24Filled />, inactiveIcon: <Wallet24Regular />, show: true },
+    { path: "/orders", label: "Orders", activeIcon: <DataArea24Filled />, inactiveIcon: <DataArea24Regular />, show: true },
+    { path: "/admin/health", label: "System Health", activeIcon: <HeartPulse24Filled />, inactiveIcon: <HeartPulse24Regular />, show: isAdmin() }, 
   ];
 
   return (
@@ -24,7 +39,7 @@ export const AppLayout = () => {
           <Text size={500} weight="bold">CryptoThesis</Text>
         </div>
 
-        {navItems.map((item) => {
+        {navItems.filter(item => item.show).map((item) => {
           const isActive = location.pathname === item.path;
           return (
             <Link key={item.path} to={item.path} style={{ textDecoration: "none" }}>
@@ -41,14 +56,24 @@ export const AppLayout = () => {
           <Text size={400} weight="semibold" style={{ color: tokens.colorNeutralForeground3 }}>Trading Environment: Live</Text>
           <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
             
-            {/* ✨ Theme Toggle! */}
             <Button 
               appearance="transparent" 
               icon={isDark ? <WeatherSunny24Regular /> : <WeatherMoon24Regular />} 
               onClick={toggleTheme}
               title="Toggle Theme"
             />
-            <Avatar name={username || "Guest User"} badge={{ status: username ? "available" : "offline" }} />
+            
+            {token ? (
+              <div style={{ display: "flex", alignItems: "center", gap: "12px", cursor: "pointer" }} onClick={logout}>
+                <Avatar name={username || "User"} badge={{ status: "available" }} />
+                <Text size={200} weight="medium">Logout</Text>
+              </div>
+            ) : (
+              <Button appearance="primary" onClick={() => navigate('/login')}>
+                Sign In
+              </Button>
+            )}
+            
           </div>
         </header>
 
@@ -56,6 +81,8 @@ export const AppLayout = () => {
           <Outlet />
         </div>
       </main>
+      
+      <ToastContainer />
     </div>
   );
 };

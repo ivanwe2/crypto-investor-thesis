@@ -8,6 +8,7 @@ using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using Polly;
+using Polly.CircuitBreaker;
 using Polly.Extensions.Http;
 using StackExchange.Redis;
 using System.Text;
@@ -73,18 +74,21 @@ public static class ServiceCollectionExtensions
             options.Address = new Uri(gatewayUrl);
         });
         
+        var aiCircuitBreaker = HttpPolicyExtensions
+            .HandleTransientHttpError()
+            .CircuitBreakerAsync(3, TimeSpan.FromSeconds(30));
+
+        services.AddSingleton<AsyncCircuitBreakerPolicy<HttpResponseMessage>>(aiCircuitBreaker);
+
         services.AddHttpClient<IAiAnalyst, HttpAiAnalyst>(client =>
         {
-            string aiUrl = configuration[AiAnalystConstants.UrlConfigKey] 
-                           ?? AiAnalystConstants.DefaultUrl;
+            string aiUrl = configuration[AiAnalystConstants.UrlConfigKey] ?? AiAnalystConstants.DefaultUrl;
             client.BaseAddress = new Uri(aiUrl);
-
-            string apiKey = configuration[AiAnalystConstants.ApiKeyConfigKey]
-                            ?? AiAnalystConstants.DefaultApiKey;
+            string apiKey = configuration[AiAnalystConstants.ApiKeyConfigKey] ?? AiAnalystConstants.DefaultApiKey;
             client.DefaultRequestHeaders.Add("X-API-Key", apiKey);
         })
         .AddPolicyHandler(GetRetryPolicy())
-        .AddPolicyHandler(GetCircuitBreakerPolicy());
+        .AddPolicyHandler(aiCircuitBreaker);
 
         return services;
 
@@ -93,13 +97,6 @@ public static class ServiceCollectionExtensions
             return HttpPolicyExtensions
                 .HandleTransientHttpError()
                 .WaitAndRetryAsync(3, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)));
-        }
-
-        static IAsyncPolicy<HttpResponseMessage> GetCircuitBreakerPolicy()
-        {
-            return HttpPolicyExtensions
-                .HandleTransientHttpError()
-                .CircuitBreakerAsync(3, TimeSpan.FromSeconds(30));
         }
     }
 
@@ -174,6 +171,7 @@ public static class ServiceCollectionExtensions
         });
 
         services.AddSignalR();
+        services.AddSingleton<SignalRConnectionTracker>();
         services.AddSingleton<IPriceBroadcaster, SignalRPriceBroadcaster>();
         services.AddSingleton<ITradeNotifier, SignalRTradeNotifier>();
         services.AddSingleton<IUserIdProvider, CustomUserIdProvider>();

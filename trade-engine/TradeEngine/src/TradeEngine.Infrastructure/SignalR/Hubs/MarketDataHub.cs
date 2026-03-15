@@ -1,10 +1,22 @@
 using Microsoft.AspNetCore.SignalR;
+using TradeEngine.Infrastructure.SignalR.Services;
 
 namespace TradeEngine.Infrastructure.SignalR.Hubs;
 
-public class MarketDataHub : Hub
+public class MarketDataHub(SignalRConnectionTracker tracker) : Hub
 {
-    // Frontend calls this: connection.invoke("JoinMarketGroup", "BTCUSDT")
+     public override async Task OnConnectedAsync()
+    {
+        tracker.Increment();
+        await base.OnConnectedAsync();
+    }
+
+    public override async Task OnDisconnectedAsync(Exception? exception)
+    {
+        tracker.Decrement();
+        await base.OnDisconnectedAsync(exception);
+    }
+
     public async Task JoinMarketGroup(string symbol)
     {
         // Add the user's connection ID to a group named after the symbol (e.g., "BTCUSDT")

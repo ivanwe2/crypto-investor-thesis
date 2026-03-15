@@ -32,7 +32,7 @@ public class AuthService(TradeEngineDbContext dbContext, IConfiguration configur
         var user = userResult.Value;
 
         var wallet = new Wallet(user.Id);
-        wallet.Deposit("USDT", 10000m);
+        wallet.Deposit("USDT", 10_000m);
 
         dbContext.Users.Add(user);
         dbContext.Wallets.Add(wallet);
@@ -67,7 +67,8 @@ public class AuthService(TradeEngineDbContext dbContext, IConfiguration configur
             new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()), 
             new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
             new Claim(JwtRegisteredClaimNames.UniqueName, user.Username),
-            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+            new Claim(ClaimTypes.Role, user.Role),
         };
 
         var token = new JwtSecurityToken(
