@@ -23,6 +23,11 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
                .HasMaxLength(256)
                .IsRequired();
 
+       builder.Property(x => x.Role)
+               .HasMaxLength(20)
+               .IsRequired()
+               .HasDefaultValue("User");
+
         builder.Property(x => x.CreatedAt)
                .IsRequired();
     }

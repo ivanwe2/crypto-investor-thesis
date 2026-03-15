@@ -1,3 +1,5 @@
+using TradeEngine.Domain.Constants;
+
 namespace TradeEngine.Domain.Entities;
 
 public class User
@@ -5,11 +7,12 @@ public class User
     public Guid Id { get; private set; }
     public string Username { get; private set; } = string.Empty;
     public string PasswordHash { get; private set; } = string.Empty;
+    public string Role { get; private set; } = string.Empty;
     public DateTime CreatedAt { get; private set; }
 
     private User() { }
 
-    public static Result<User> Create(string username, string passwordHash)
+    public static Result<User> Create(string username, string passwordHash, string role = RoleConstants.User)
     {
         if (string.IsNullOrWhiteSpace(username))
             return Result<User>.Failure<User>(new Error("User.Invalid", "Username cannot be empty"));
@@ -22,7 +25,8 @@ public class User
             Id = Guid.NewGuid(),
             Username = username,
             PasswordHash = passwordHash,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            Role = role,
         };
     }
 }

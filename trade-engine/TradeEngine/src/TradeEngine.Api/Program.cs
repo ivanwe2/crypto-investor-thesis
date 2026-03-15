@@ -3,6 +3,7 @@ using TradeEngine.Api.Endpoints;
 using TradeEngine.Api.Extensions;
 using TradeEngine.Application.Constants;
 using TradeEngine.Infrastructure.Extensions;
+using TradeEngine.Infrastructure.Persistence.Seeder;
 using TradeEngine.Infrastructure.SignalR.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -39,6 +40,7 @@ var app = builder.Build();
 app.UseExceptionHandler();
 
 await app.ApplyMigrationsAsync();
+await DatabaseSeeder.SeedAsync(app.Services);
 
 if (app.Environment.IsDevelopment())
 {

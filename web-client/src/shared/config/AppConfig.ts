@@ -18,6 +18,7 @@ export const AppConfig = {
         AuthRegister: '/api/v1/auth/register',
         WalletsMyWallet: '/api/v1/wallets/my-wallet',
         Orders: '/api/v1/orders',
-        Markets: '/api/v1/markets'
+        Markets: '/api/v1/markets',
+        SystemHealth: '/api/v1/system/health'
     }
 };
