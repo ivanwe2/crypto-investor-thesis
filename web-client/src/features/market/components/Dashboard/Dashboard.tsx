@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Card,
   CardHeader,
@@ -7,20 +8,78 @@ import {
   Input,
   Button,
   tokens,
+  Spinner,
+  makeStyles,
+  shorthands,
 } from "@fluentui/react-components";
-import { Dismiss16Regular, Add16Regular } from "@fluentui/react-icons";
+import {
+  Dismiss16Regular,
+  Add16Regular,
+  ArrowTrendingLines24Regular,
+} from "@fluentui/react-icons";
 import { signalRService } from "../../../../shared/services/signalRService";
 import { useMarketStore } from "../../store/marketStore";
 import { useAuthStore } from "../../../auth/store/authStore";
 import { useWatchlistStore } from "../../store/watchlistStore";
-
-import styles from "./Dashboard.module.scss";
-import { AuthWidget } from "../../../auth/components/AuthWidget";
 import { SentimentWidget } from "../../../ai/components/SentimentWidget";
-import { TradePanel } from "../../../trading/components/TradePanel";
-import { ToastContainer } from "../../../../shared/components/toast/ToastContainer";
+
+// ✨ Fluent UI native styling (Replaces Dashboard.module.scss)
+const useStyles = makeStyles({
+  dashboardContainer: {
+    ...shorthands.padding("24px"),
+    maxWidth: "1400px",
+    ...shorthands.margin("0", "auto"),
+  },
+  header: {
+    ...shorthands.margin("0", "0", "24px", "0"),
+  },
+  grid: {
+    display: "grid",
+    gridTemplateColumns: "2fr 1fr",
+    ...shorthands.gap("24px"),
+    alignItems: "start",
+    "@media (max-width: 1024px)": {
+      gridTemplateColumns: "1fr",
+    },
+  },
+  tickerGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
+    ...shorthands.gap("16px"),
+  },
+  tickerCard: {
+    cursor: "pointer",
+    transitionProperty: "transform, box-shadow",
+    transitionDuration: "0.2s",
+    transitionTimingFunction: "ease",
+    ...shorthands.border("1px", "solid", "transparent"),
+    ":hover": {
+      transform: "translateY(-2px)",
+      boxShadow: tokens.shadow16,
+      ...shorthands.borderColor(tokens.colorBrandStroke1),
+    },
+  },
+  tickerCardEmpty: {
+    minHeight: "140px",
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "center",
+    alignItems: "center",
+    ...shorthands.gap("12px"),
+  },
+  sidebar: {
+    display: "flex",
+    flexDirection: "column",
+    ...shorthands.gap("24px"),
+    position: "sticky",
+    top: "24px",
+  },
+});
 
 export const Dashboard = () => {
+  const styles = useStyles();
+  const navigate = useNavigate();
+
   const token = useAuthStore((state) => state.token);
   const tickers = useMarketStore((state) => state.tickers);
   const { symbols: watchList, addSymbol, removeSymbol } = useWatchlistStore();
@@ -34,6 +93,13 @@ export const Dashboard = () => {
     init();
   }, [token, watchList]);
 
+  const handleAddSymbol = () => {
+    if (newSymbol) {
+      addSymbol(newSymbol.toUpperCase());
+      setNewSymbol("");
+    }
+  };
+
   return (
     <div className={styles.dashboardContainer}>
       <header className={styles.header}>
@@ -43,8 +109,7 @@ export const Dashboard = () => {
       </header>
 
       <div className={styles.grid}>
-        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-          {/* ✨ ADD SYMBOL WIDGET ✨ */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
           <Card
             style={{ backgroundColor: tokens.colorNeutralBackground1Hover }}
           >
@@ -54,14 +119,12 @@ export const Dashboard = () => {
                 onChange={(_, d) => setNewSymbol(d.value)}
                 placeholder="Add symbol (e.g. ADAUSDT)"
                 style={{ flex: 1 }}
+                onKeyDown={(e) => e.key === "Enter" && handleAddSymbol()}
               />
               <Button
                 icon={<Add16Regular />}
                 appearance="primary"
-                onClick={() => {
-                  addSymbol(newSymbol);
-                  setNewSymbol("");
-                }}
+                onClick={handleAddSymbol}
               >
                 Add Coin
               </Button>
@@ -74,14 +137,7 @@ export const Dashboard = () => {
 
               if (!ticker) {
                 return (
-                  <Card
-                    key={symbol}
-                    style={{
-                      minHeight: "160px",
-                      justifyContent: "center",
-                      alignItems: "center",
-                    }}
-                  >
+                  <Card key={symbol} className={styles.tickerCardEmpty}>
                     <CardHeader
                       action={
                         <Button
@@ -94,12 +150,7 @@ export const Dashboard = () => {
                     <Text size={400} weight="semibold">
                       {symbol}
                     </Text>
-                    <Text
-                      size={200}
-                      style={{ color: tokens.colorNeutralForeground3 }}
-                    >
-                      Waiting for data...
-                    </Text>
+                    <Spinner size="tiny" label="Connecting..." />
                   </Card>
                 );
               }
@@ -110,13 +161,15 @@ export const Dashboard = () => {
               return (
                 <Card
                   key={symbol}
+                  className={styles.tickerCard}
                   style={{
                     backgroundColor: tokens.colorNeutralBackground1Hover,
                   }}
+                  onClick={() => navigate(`/market/${symbol}`)}
                 >
                   <CardHeader
                     header={
-                      <Text weight="semibold" size={400}>
+                      <Text weight="semibold" size={500}>
                         {symbol}
                       </Text>
                     }
@@ -129,17 +182,26 @@ export const Dashboard = () => {
                       </Text>
                     }
                     action={
-                      <div style={{ display: "flex", gap: "4px" }}>
+                      // ✨ FIXED: Added alignItems: "center" to perfectly align Badge and Button
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: "8px",
+                          alignItems: "center",
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <Badge
                           appearance="tint"
-                          size="medium"
                           shape="rounded"
                           color={
                             isUp ? "success" : isDown ? "danger" : "informative"
                           }
+                          style={{
+                            minWidth: "85px",
+                          }}
                         >
-                          {isUp ? "▲" : isDown ? "▼" : "−"}{" "}
-                          {ticker.trend.toUpperCase()}
+                          {isUp ? "▲" : isDown ? "▼" : "−"}{" "}{ticker.trend.toUpperCase()}
                         </Badge>
                         <Button
                           icon={<Dismiss16Regular />}
@@ -149,24 +211,40 @@ export const Dashboard = () => {
                       </div>
                     }
                   />
-                  <Text
-                    size={800}
-                    weight="bold"
+
+                  <div
                     style={{
-                      color: isUp
-                        ? tokens.colorPaletteGreenForeground1
-                        : isDown
-                          ? tokens.colorPaletteRedForeground1
-                          : tokens.colorNeutralForeground1,
+                      marginTop: "16px",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "flex-end",
                     }}
                   >
-                    $
-                    {ticker.price.toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 4,
-                    })}
-                  </Text>
-                  <TradePanel symbol={symbol} currentPrice={ticker.price} />
+                    <Text
+                      size={800}
+                      weight="bold"
+                      style={{
+                        color: isUp
+                          ? tokens.colorPaletteGreenForeground1
+                          : isDown
+                            ? tokens.colorPaletteRedForeground1
+                            : tokens.colorNeutralForeground1,
+                      }}
+                    >
+                      $
+                      {ticker.price.toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 4,
+                      })}
+                    </Text>
+
+                    <Button
+                      icon={<ArrowTrendingLines24Regular />}
+                      appearance="subtle"
+                    >
+                      Trade
+                    </Button>
+                  </div>
                 </Card>
               );
             })}
@@ -174,9 +252,7 @@ export const Dashboard = () => {
         </div>
 
         <div className={styles.sidebar}>
-          <AuthWidget />
           <SentimentWidget />
-          <ToastContainer />
         </div>
       </div>
     </div>

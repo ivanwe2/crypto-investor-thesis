@@ -7,8 +7,9 @@ import (
 	"net"
 	"time"
 
-	pb "ingestor/gen/marketgateway/v1" // Imports our newly generated code
+	pb "ingestor/gen/marketgateway/v1"
 	"ingestor/internal/cache"
+	"ingestor/internal/exchange"
 
 	"google.golang.org/grpc"
 )
@@ -44,7 +45,6 @@ func (s *MarketDataServer) GetVolatilityScore(ctx context.Context, req *pb.Volat
 		return nil, fmt.Errorf("symbol %s not found", req.Symbol)
 	}
 
-	// Simple AI/Rules engine for volatility regimes
 	regime := "NORMAL"
 	if snap.Volatility > 5.0 {
 		regime = "HIGH"
@@ -61,18 +61,15 @@ func (s *MarketDataServer) GetVolatilityScore(ctx context.Context, req *pb.Volat
 
 // 3. Streaming Request: Push continuous updates to the client
 func (s *MarketDataServer) StreamMarketData(req *pb.StreamRequest, stream pb.MarketDataService_StreamMarketDataServer) error {
-	// Send updates twice a second. Much lighter than raw WebSocket ticks!
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-stream.Context().Done():
-			// The client (e.g., .NET) disconnected
 			log.Println("[INFO] Client disconnected from gRPC stream")
 			return nil
 		case <-ticker.C:
-			// Loop through requested symbols and send latest cache snapshots
 			for _, symbol := range req.Symbols {
 				if snap, exists := s.cache.GetSnapshot(symbol); exists {
 					err := stream.Send(&pb.MarketSnapshot{
@@ -82,12 +79,64 @@ func (s *MarketDataServer) StreamMarketData(req *pb.StreamRequest, stream pb.Mar
 						TimestampUtc: snap.Timestamp,
 					})
 					if err != nil {
-						return err // Stream broken
+						return err
 					}
 				}
 			}
 		}
 	}
+}
+
+// 4. ✨ NEW: Fetch Historical Klines via REST fallback
+func (s *MarketDataServer) GetHistoricalKlines(ctx context.Context, req *pb.KlinesRequest) (*pb.KlinesResponse, error) {
+	klinesData, err := exchange.FetchHistoricalKlines(ctx, req.Symbol, req.Interval, req.Limit)
+	if err != nil {
+		log.Printf("[ERROR] Failed to fetch klines: %v", err)
+		return nil, err
+	}
+
+	response := &pb.KlinesResponse{
+		Symbol: req.Symbol,
+		Klines: make([]*pb.Kline, 0, len(klinesData)),
+	}
+
+	for _, k := range klinesData {
+		response.Klines = append(response.Klines, &pb.Kline{
+			StartTimeUtc: k.StartTimeUTC,
+			Open:         k.Open,
+			High:         k.High,
+			Low:          k.Low,
+			Close:        k.Close,
+			Volume:       k.Volume,
+		})
+	}
+
+	return response, nil
+}
+
+// 5. ✨ NEW: Fetch Order Book Depth via REST fallback
+func (s *MarketDataServer) GetOrderBookDepth(ctx context.Context, req *pb.OrderBookRequest) (*pb.OrderBookResponse, error) {
+	depthData, err := exchange.FetchOrderBookDepth(ctx, req.Symbol, req.Limit)
+	if err != nil {
+		log.Printf("[ERROR] Failed to fetch depth: %v", err)
+		return nil, err
+	}
+
+	response := &pb.OrderBookResponse{
+		Symbol:       req.Symbol,
+		LastUpdateId: depthData.LastUpdateID,
+		Bids:         make([]*pb.OrderBookEntry, 0, len(depthData.Bids)),
+		Asks:         make([]*pb.OrderBookEntry, 0, len(depthData.Asks)),
+	}
+
+	for _, b := range depthData.Bids {
+		response.Bids = append(response.Bids, &pb.OrderBookEntry{Price: b.Price, Size: b.Size})
+	}
+	for _, a := range depthData.Asks {
+		response.Asks = append(response.Asks, &pb.OrderBookEntry{Price: a.Price, Size: a.Size})
+	}
+
+	return response, nil
 }
 
 // StartServer spins up the gRPC listener on a background thread
