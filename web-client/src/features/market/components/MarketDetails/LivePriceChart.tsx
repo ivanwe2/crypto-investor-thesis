@@ -119,7 +119,7 @@ export const LivePriceChart = ({ symbol, currentPrice }: { symbol: string; curre
     <Card style={{ height: 400, backgroundColor: tokens.colorNeutralBackground1Hover }}>
       <CardHeader 
         header={<Text weight="semibold" size={500}>{symbol} 1m Chart</Text>} 
-        action={<Badge appearance="tint" color="success" shape="rounded">SignalR Live</Badge>}
+        action={<Badge appearance="tint" color="success" shape="rounded">Live</Badge>}
       />
       <div style={{ width: "100%", height: 320 }}>
         {isLoading ? (

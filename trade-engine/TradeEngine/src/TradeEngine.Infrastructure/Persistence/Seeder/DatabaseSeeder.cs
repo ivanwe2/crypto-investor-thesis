@@ -24,7 +24,7 @@ public static class DatabaseSeeder
         string masterPassword = "AdminPassword123!";
         string adminPasswordHash = BCrypt.Net.BCrypt.HashPassword(masterPassword);
 
-        var adminUser = User.Create("admin", adminPasswordHash, RoleConstants.Admin).Value;
+        var adminUser = User.Create("Admin", adminPasswordHash, RoleConstants.Admin).Value;
 
         var adminWallet = new Wallet(adminUser.Id);
         adminWallet.Deposit("USDT", 100_000_000m);
