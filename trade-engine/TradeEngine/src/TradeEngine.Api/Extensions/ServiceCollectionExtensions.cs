@@ -11,7 +11,9 @@ using Polly;
 using Polly.CircuitBreaker;
 using Polly.Extensions.Http;
 using StackExchange.Redis;
+using System.Security.Claims;
 using System.Text;
+using System.Threading.RateLimiting;
 using TradeEngine.Api.Middleware.ExceptionHandling;
 using TradeEngine.Api.Services;
 using TradeEngine.Application.Constants;
@@ -229,6 +231,47 @@ public static class ServiceCollectionExtensions
                         options.Endpoint = new Uri(otlpEndpoint);
                     });
             });
+
+        return services;
+    }
+
+    public static IServiceCollection AddRateLimitingServices(this IServiceCollection services)
+    {
+        services.AddRateLimiter(options =>
+        {
+            options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+            options.OnRejected = async (context, token) =>
+            {
+                await context.HttpContext.Response.WriteAsJsonAsync(new
+                {
+                    Type = "https://tools.ietf.org/html/rfc6585#section-4",
+                    Title = "Too Many Requests",
+                    Status = 429,
+                    Detail = "Rate limit exceeded. To protect the matching engine, you are limited to 10 requests per second."
+                }, cancellationToken: token);
+            };
+
+            options.AddPolicy(PolicyConstants.OrderPlacement, httpContext =>
+            {
+                var userId = httpContext.User?.FindFirstValue(ClaimTypes.NameIdentifier) 
+                              ?? httpContext.User?.FindFirstValue("sub");
+
+                var partitionKey = !string.IsNullOrEmpty(userId) 
+                    ? userId 
+                    : httpContext.Connection.RemoteIpAddress?.ToString() ?? "anonymous";
+
+                return RateLimitPartition.GetTokenBucketLimiter(partitionKey, _ =>
+                    new TokenBucketRateLimiterOptions
+                    {
+                        TokenLimit = 10,
+                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                        QueueLimit = 0,
+                        ReplenishmentPeriod = TimeSpan.FromSeconds(1),
+                        TokensPerPeriod = 10,
+                        AutoReplenishment = true,
+                    });
+            });
+        });
 
         return services;
     }
