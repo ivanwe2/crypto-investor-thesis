@@ -10,9 +10,14 @@ public static class RabbitMqConstants
     public const string PortConfigKey = "RabbitMq:Port";
     public const string UsernameConfigKey = "RabbitMq:Username";
     public const string PasswordConfigKey = "RabbitMq:Password";
+    
+    public const string ManagementUrlConfigKey = "RabbitMq:ManagementUrl";
 
     public const string DefaultHost = "localhost";
     public const string DefaultPort = "5672";
-    public const string DefaultUsername = "guest";
-    public const string DefaultPassword = "guest";
+    
+    public const string DefaultUsername = "user";
+    public const string DefaultPassword = "password";
+    
+    public const string DefaultManagementUrl = "http://user:password@localhost:15672/api/queues/%2f/trade_events";
 }

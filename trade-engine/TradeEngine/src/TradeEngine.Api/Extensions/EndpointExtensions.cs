@@ -1,10 +1,12 @@
 using System.Diagnostics;
+using System.Text.Json;
 using Asp.Versioning;
 using Grpc.Core;
 using Marketgateway.V1;
 using Polly.CircuitBreaker;
 using StackExchange.Redis;
 using TradeEngine.Api.Endpoints;
+using TradeEngine.Application.Constants;
 using TradeEngine.Infrastructure.Persistence;
 using TradeEngine.Infrastructure.SignalR.Services;
 
@@ -46,49 +48,110 @@ public static class EndpointExtensions
             IConnectionMultiplexer redis,
             MarketDataService.MarketDataServiceClient grpcClient,
             AsyncCircuitBreakerPolicy<HttpResponseMessage> aiCircuitBreaker,
-            SignalRConnectionTracker signalRTracker) => 
+            SignalRConnectionTracker signalRTracker,
+            IHttpClientFactory httpClientFactory,
+            IConfiguration config) => 
         {
             var sw = Stopwatch.StartNew();
+            using var httpClient = httpClientFactory.CreateClient();
+            httpClient.Timeout = TimeSpan.FromSeconds(2); 
 
-            // 1. Check PostgreSQL
             bool isDbHealthy = await db.Database.CanConnectAsync();
 
-            // 2. Check Redis
             bool isRedisHealthy = redis.IsConnected;
 
-            // 3. Check Go gRPC Gateway (by asking for a snapshot of BTC)
             string grpcStatus = "Disconnected";
             try 
             {
-                // Give it a 1 second timeout so it doesn't hang the dashboard
                 var deadline = DateTime.UtcNow.AddSeconds(1);
-                var ping = await grpcClient.GetMarketSnapshotAsync(
+                await grpcClient.GetMarketSnapshotAsync(
                     new SnapshotRequest { Symbol = "BTCUSDT" }, 
                     deadline: deadline);
-                
                 grpcStatus = "Connected";
             } 
-            catch (RpcException) 
+            catch (RpcException) { grpcStatus = "Unreachable"; }
+
+            var goMetrics = new { Goroutines = 0, MemoryAllocMb = 0, MemorySysMb = 0, Status = "Offline" };
+            try
             {
-                grpcStatus = "Unreachable";
+                var goHealthUrl = config[MarketGatewayConstants.HealthUrlConfigKey] ?? MarketGatewayConstants.DefaultHealthUrl;
+                var goResponse = await httpClient.GetAsync(goHealthUrl);
+                if (goResponse.IsSuccessStatusCode)
+                {
+                    var goContent = await goResponse.Content.ReadAsStringAsync();
+                    var parsed = JsonSerializer.Deserialize<JsonElement>(goContent);
+                    goMetrics = new 
+                    { 
+                        Goroutines = parsed.GetProperty("goroutines").GetInt32(),
+                        MemoryAllocMb = parsed.GetProperty("memoryAllocMb").GetInt32(),
+                        MemorySysMb = parsed.GetProperty("memorySysMb").GetInt32(),
+                        Status = "Online"
+                    };
+                }
             }
+            catch { /* Ignore, defaults to Offline */ }
+
+            string aiStatus = "Unreachable";
+            try
+            {
+                var aiHealthUrl = config[AiAnalystConstants.HealthUrlConfigKey] ?? AiAnalystConstants.DefaultHealthUrl;
+                var aiResponse = await httpClient.GetAsync(aiHealthUrl);
+                if (aiResponse.IsSuccessStatusCode)
+                {
+                    aiStatus = "Online";
+                }
+            }
+            catch { /* Ignore, defaults to Unreachable */ }
+
+            int tradeEventsQueueDepth = 0;
+            string rabbitStatus = "Unreachable";
+            try
+            {
+                var rabbitUrl = config[RabbitMqConstants.ManagementUrlConfigKey] ?? RabbitMqConstants.DefaultManagementUrl;
+                var rabbitResp = await httpClient.GetAsync(rabbitUrl);
+                if (rabbitResp.IsSuccessStatusCode)
+                {
+                    var rabbitContent = await rabbitResp.Content.ReadAsStringAsync();
+                    var parsed = JsonSerializer.Deserialize<JsonElement>(rabbitContent);
+                    if (parsed.TryGetProperty("messages_ready", out var messages))
+                    {
+                        tradeEventsQueueDepth = messages.GetInt32();
+                    }
+                    rabbitStatus = "Online";
+                }
+            }
+            catch { /* Ignore, defaults to 0 and Unreachable */ }
+
+            ThreadPool.GetAvailableThreads(out int workerThreads, out int completionPortThreads);
+            var process = Process.GetCurrentProcess();
 
             sw.Stop();
 
-            // Aggregate Response
             var healthReport = new 
             {
-                Status = isDbHealthy && isRedisHealthy ? "Healthy" : "Degraded",
+                Status = isDbHealthy && isRedisHealthy && grpcStatus == "Connected" ? "Healthy" : "Degraded",
                 Uptime = TimeSpan.FromMilliseconds(Environment.TickCount64).ToString(@"dd\.hh\:mm\:ss"),
                 ResponseTimeMs = sw.ElapsedMilliseconds,
-                Components = new 
+                
+                Infrastructure = new 
                 {
                     PostgreSQL = isDbHealthy ? "Up" : "Down",
-                    RedisReadModel = isRedisHealthy ? "Up" : "Down",
-                    GoMarketGateway = grpcStatus,
-                    AiCircuitBreaker = aiCircuitBreaker.CircuitState.ToString(), // e.g. "Closed", "Open", "HalfOpen"
-                    ActiveSignalRConnections = signalRTracker.CurrentConnections
-                }
+                    Redis = isRedisHealthy ? "Up" : "Down",
+                    RabbitMQ = rabbitStatus,
+                    RabbitMqTradeEventsQueueDepth = tradeEventsQueueDepth,
+                    AiAnalyst = aiStatus,
+                    AiCircuitBreaker = aiCircuitBreaker.CircuitState.ToString()
+                },
+
+                DotNetMetrics = new
+                {
+                    ActiveSignalRConnections = signalRTracker.CurrentConnections,
+                    MemoryWorkingSetMb = process.WorkingSet64 / 1024 / 1024,
+                    GarbageCollectionAllocatedMb = GC.GetTotalMemory(false) / 1024 / 1024,
+                    AvailableWorkerThreads = workerThreads
+                },
+
+                GoGatewayMetrics = goMetrics
             };
 
             return Results.Ok(healthReport);
