@@ -33,6 +33,9 @@ var (
 func main() {
 	log.Println("[INFO] Crypto Ingestor Starting...")
 
+	appCtx, appCancel := context.WithCancel(context.Background())
+	defer appCancel()
+
 	cfg := config.Load()
 
 	otelShutdown, err := telemetry.InitProvider("TradeIngestor", "otel-collector:4317")
@@ -51,7 +54,7 @@ func main() {
 	marketCache := cache.NewMarketCache()
 	volTracker := analytics.NewVolatilityTracker()
 
-	go grpc.StartServer(":50051", marketCache)
+	grpcServer := grpc.StartServer(":50051", marketCache)
 
 	httpServer := health.NewServer(cfg.HealthPort)
 	go func() {
@@ -62,7 +65,7 @@ func main() {
 	}()
 
 	tradesChan := make(chan exchange.CombinedStreamEvent, 10000)
-	go exchange.Connect(cfg.Symbols, tradesChan)
+	go exchange.Connect(appCtx, cfg.Symbols, tradesChan)
 
 	stopChan := make(chan os.Signal, 1)
 	signal.Notify(stopChan, os.Interrupt, syscall.SIGTERM)
@@ -113,14 +116,40 @@ func main() {
 		case sig := <-stopChan:
 			log.Printf("[INFO] Received shutdown signal: %v. Initiating graceful shutdown...", sig)
 
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
+			// 1. Signal the Binance WebSocket to close and stop sending new trades
+			appCancel()
 
-			if err := httpServer.Shutdown(ctx); err != nil {
-				log.Printf("[WARN] HTTP server shutdown error: %v", err)
-			}
+			// 2. Create a timeout context so we don't hang forever if a connection is stuck
+			shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer shutdownCancel()
 
-			if err := otelShutdown(ctx); err != nil {
+			// 3. Use WaitGroup to shut down HTTP and gRPC simultaneously
+			var wg sync.WaitGroup
+
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				log.Println("[INFO] Stopping gRPC Server gracefully (flushing streams)...")
+				grpcServer.GracefulStop() // Waits for active RPCs to finish
+				log.Println("[INFO] gRPC Server stopped.")
+			}()
+
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				log.Println("[INFO] Stopping HTTP Health Server...")
+				if err := httpServer.Shutdown(shutdownCtx); err != nil {
+					log.Printf("[WARN] HTTP server shutdown error: %v", err)
+				}
+				log.Println("[INFO] HTTP Health Server stopped.")
+			}()
+
+			// Wait for networking layers to finish shutting down
+			wg.Wait()
+
+			// 4. Finally, flush remaining OpenTelemetry logs before the process dies
+			log.Println("[INFO] Flushing OpenTelemetry traces...")
+			if err := otelShutdown(shutdownCtx); err != nil {
 				log.Printf("[WARN] OTEL shutdown error: %v", err)
 			}
 
