@@ -9,7 +9,6 @@ using TradeEngine.Application.Interfaces;
 using TradeEngine.Domain.Entities;
 using TradeEngine.Domain.Enums;
 using TradeEngine.Infrastructure.Persistence;
-using TradeEngine.Infrastructure.Services.Orders;
 using TradeEngine.Infrastructure.Services.TradeSettlement;
 
 namespace TradeEngine.Infrastructure.BackgroundServices.OrderMatching;
@@ -20,7 +19,6 @@ public class OrderMatchingWorker(
     IOrderIngressQueue ingressQueue,
     ILogger<OrderMatchingWorker> logger) : BackgroundService
 {
-    // ✨ BOOST: Changed inner collection to Dictionary<Guid, Order> for O(1) removals instead of O(N) List shifting
     private readonly ConcurrentDictionary<string, Dictionary<Guid, Order>> _localOrderBook = new();
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -45,7 +43,6 @@ public class OrderMatchingWorker(
             .AsNoTracking()
             .ToListAsync(stoppingToken);
 
-        // Map to nested dictionaries
         var grouped = pendingOrders
             .GroupBy(o => o.Symbol)
             .ToDictionary(g => g.Key, g => g.ToDictionary(o => o.Id, o => o));
@@ -69,7 +66,7 @@ public class OrderMatchingWorker(
                 {
                     lock (existingDict) 
                     {
-                        existingDict[newOrder.Id] = newOrder; // O(1) Add
+                        existingDict[newOrder.Id] = newOrder; 
                     }
                     return existingDict;
                 }
@@ -108,26 +105,44 @@ public class OrderMatchingWorker(
                     
                     lock (pendingOrders)
                     {
-                        // Use .Values to iterate
+                        // ✨ Phase v0.85: Market Orders match instantly. Limit orders wait for price overlap.
                         matches = pendingOrders.Values.Where(o => 
+                            o.Type == OrderType.Market ||
                             (o.Side == OrderSide.Buy && currentPrice <= o.TargetPrice) ||
                             (o.Side == OrderSide.Sell && currentPrice >= o.TargetPrice)
                         ).ToList();
 
                         foreach (var match in matches)
                         {
-                            pendingOrders.Remove(match.Id); // ✨ O(1) REMOVAL! Massive performance gain.
+                            pendingOrders.Remove(match.Id); 
                         }
                     }
 
                     foreach (var match in matches)
                     {
-                        if (snapshot.Volatility > 10.0) {
-                            logger.LogInformation("📊 Note: Executing {Symbol} trade during high volatility (Welford: {Vol})", symbol, snapshot.Volatility);
+                        decimal executionPrice = currentPrice;
+
+                        if (match.Type == OrderType.Market)
+                        {
+                            decimal volatilityFactor = (decimal)Math.Max(snapshot.Volatility, 1.0);
+                            
+                            decimal slippageBps = (match.Quantity / 100m) * volatilityFactor * 0.0001m;
+                            
+                            slippageBps = Math.Min(slippageBps, 0.05m);
+
+                            executionPrice = match.Side == OrderSide.Buy 
+                                ? currentPrice * (1 + slippageBps) 
+                                : currentPrice * (1 - slippageBps);
+
+                            logger.LogInformation("📉 VWAP Execution: Market {Side} of {Qty} {Symbol}. Top-of-book: ${Top}, VWAP Settled: ${Exec}", 
+                                match.Side, match.Quantity, match.Symbol, currentPrice, executionPrice);
+                        }
+                        else 
+                        {
+                            logger.LogInformation("🎯 Event-Driven Match! Queuing Limit Order {Id} for Settlement at ${Price}.", match.Id, currentPrice);
                         }
 
-                        logger.LogInformation("🎯 Event-Driven Match! Queuing Order {Id} for Settlement at ${Price}.", match.Id, currentPrice);
-                        settlementQueue.Writer.TryWrite(new TradeSettlementCommand(match.Id, currentPrice));
+                        settlementQueue.Writer.TryWrite(new TradeSettlementCommand(match.Id, executionPrice));
                     }
                 }
             }
