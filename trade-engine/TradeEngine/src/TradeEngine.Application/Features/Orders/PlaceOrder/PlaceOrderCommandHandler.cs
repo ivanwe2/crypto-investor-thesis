@@ -32,8 +32,8 @@ public class PlaceOrderCommandHandler(
         
         if (request.Side == OrderSide.Buy)
         {
-            if (request.Type == OrderType.Market)
-                return Result.Failure<OrderResponse>(new Error("Order.NotSupported", "Market orders are not yet supported."));
+            if (request.TargetPrice <= 0)
+                return Result.Failure<OrderResponse>(new Error("Order.InvalidPrice", "A reference target price must be provided to lock collateral."));
 
             decimal totalCost = request.Quantity * request.TargetPrice;
             walletResult = wallet.Withdraw(quoteCurrency, totalCost);
@@ -58,7 +58,6 @@ public class PlaceOrderCommandHandler(
 
         try 
         {
-            // Map the entity to the DTO expected by the UI
             var orderDto = new OpenOrderDto(
                 order.Id,
                 order.Symbol,
@@ -69,10 +68,8 @@ public class PlaceOrderCommandHandler(
                 order.Status.ToString(), 
                 order.CreatedAt);
                 
-            // Instantly append to Redis
             await redisService.AddOpenOrderAsync(request.UserId, orderDto, cancellationToken);
 
-            // Instantly update the locked Wallet funds in Redis
             var balances = wallet.Balances.Select(b => new AssetBalanceDto(b.Currency, b.Amount)).ToList();
             var walletResponse = new WalletResponse(wallet.Id, balances);
             
@@ -80,11 +77,9 @@ public class PlaceOrderCommandHandler(
         }
         catch (Exception ex)
         {
-            // Swallow Redis exceptions so the user's order still succeeds.
             logger.LogWarning(ex, "Failed to update Redis synchronously for order {OrderId}", order.Id);
         }
 
-        // Instantly push to the blazing fast RAM matcher
         ingressQueue.Writer.TryWrite(order);
 
         return new OrderResponse(order.Id, order.Status.ToString(), "Order placed and funds locked successfully.");

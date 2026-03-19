@@ -11,12 +11,37 @@ class SignalRService {
     private currentToken: string | null = null;
     private readonly hubUrl = `${AppConfig.ApiBaseUrl}${AppConfig.SignalR.HubPath}`;
 
+    private priceBuffer: Record<string, any> = {};
+    
+    private bufferIntervalId: ReturnType<typeof setInterval> | null = null;
+
+    constructor() {
+        this.startBufferFlush();
+    }
+
+    private startBufferFlush() {
+        if (!this.bufferIntervalId) {
+            this.bufferIntervalId = setInterval(() => {
+                if (Object.keys(this.priceBuffer).length > 0) {
+                    useMarketStore.getState().updateTickersBatch(this.priceBuffer);
+                    this.priceBuffer = {}; 
+                }
+            }, 100);
+        }
+    }
+
+    private stopBufferFlush() {
+        if (this.bufferIntervalId) {
+            clearInterval(this.bufferIntervalId);
+            this.bufferIntervalId = null;
+        }
+    }
+
     public async startConnection(): Promise<void> {
         if (this.isConnecting) return;
 
         const newToken = useAuthStore.getState().token;
 
-        // ✨ 2. FIXED: If we are already connected AND the token hasn't changed, DO NOT drop the connection! 
         if (this.connection?.state === signalR.HubConnectionState.Connected && this.currentToken === newToken) {
             return;
         }
@@ -29,6 +54,8 @@ class SignalRService {
                 await this.connection.stop();
             }
 
+            this.startBufferFlush();
+
             this.connection = new signalR.HubConnectionBuilder()
                 .withUrl(this.hubUrl, {
                     skipNegotiation: true,
@@ -39,7 +66,7 @@ class SignalRService {
                 .build();
 
             this.connection.on(AppConfig.SignalR.Events.ReceivePriceUpdate, (data: any) => {
-                useMarketStore.getState().updateTicker(data);
+                this.priceBuffer[data.s] = data; 
             });
 
             this.connection.on(AppConfig.SignalR.Events.OrderFilled, (data: { symbol: string, quantity: number, price: number }) => {
@@ -72,6 +99,18 @@ class SignalRService {
         } finally {
             this.isConnecting = false;
         }
+    }
+
+    public async stopConnection(): Promise<void> {
+        this.stopBufferFlush();
+        
+        if (this.connection) {
+            await this.connection.stop();
+        }
+        
+        this.isConnecting = false;
+        this.currentToken = null;
+        console.log("🛑 SignalR Disconnected and Buffer Cleared.");
     }
 
     public async joinGroup(symbol: string): Promise<void> {

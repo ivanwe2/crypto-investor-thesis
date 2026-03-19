@@ -5,12 +5,27 @@ export interface SystemHealthResponse {
   status: string;
   uptime: string;
   responseTimeMs: number;
-  components: {
+  infrastructure: {
     postgreSQL: string;
-    redisReadModel: string;
-    goMarketGateway: string;
+    redis: string;
+    rabbitMQ: string;
+    rabbitMqTradeEventsQueueDepth: number;
+    rabbitMqMessageRate: number;
+    aiAnalyst: string;
     aiCircuitBreaker: string;
+    goMarketGateway: string;
+  };
+  dotNetMetrics: {
     activeSignalRConnections: number;
+    memoryWorkingSetMb: number;
+    garbageCollectionAllocatedMb: number;
+    availableWorkerThreads: number;
+  };
+  goGatewayMetrics: {
+    goroutines: number;
+    memoryAllocMb: number;
+    memorySysMb: number;
+    status: string;
   };
 }
 

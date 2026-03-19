@@ -34,6 +34,7 @@ builder.Services.AddInfrastructureServices(builder.Configuration);
 builder.Services.AddSecurityServices(builder.Configuration);
 
 builder.Services.AddObservabilityServices(builder.Configuration);
+builder.Services.AddRateLimitingServices();
 
 var app = builder.Build();
 
@@ -53,6 +54,8 @@ app.UseCors("ReactClient");
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+app.UseRateLimiter();
 
 app.MapHub<MarketDataHub>("/hubs/market");
 app.MapAllEndpoints();

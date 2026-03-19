@@ -140,7 +140,7 @@ func (s *MarketDataServer) GetOrderBookDepth(ctx context.Context, req *pb.OrderB
 }
 
 // StartServer spins up the gRPC listener on a background thread
-func StartServer(port string, c *cache.MarketCache) {
+func StartServer(port string, c *cache.MarketCache) *grpc.Server {
 	lis, err := net.Listen("tcp", port)
 	if err != nil {
 		log.Fatalf("[FATAL] Failed to listen on gRPC port: %v", err)
@@ -149,8 +149,15 @@ func StartServer(port string, c *cache.MarketCache) {
 	grpcServer := grpc.NewServer()
 	pb.RegisterMarketDataServiceServer(grpcServer, NewMarketDataServer(c))
 
-	log.Printf("[INFO] gRPC MarketGateway listening on %s", port)
-	if err := grpcServer.Serve(lis); err != nil {
-		log.Fatalf("[FATAL] Failed to serve gRPC: %v", err)
-	}
+	// Run in a goroutine so it doesn't block the caller (main.go)
+	go func() {
+		log.Printf("[INFO] gRPC MarketGateway listening on %s", port)
+		if err := grpcServer.Serve(lis); err != nil {
+			// Serve() returns an error if stopped, ignore if it's the expected shutdown
+			log.Printf("[WARN] gRPC Server stopped: %v", err)
+		}
+	}()
+
+	// Return the instance so main.go can call GracefulStop() later
+	return grpcServer
 }

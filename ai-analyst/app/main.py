@@ -27,7 +27,6 @@ async def verify_api_key(api_key: str = Security(api_key_header)):
 
 @app.on_event("startup")
 def startup_event():
-
     init_telemetry()
     # 1. Load FinBERT
     analyzer.load_model()
