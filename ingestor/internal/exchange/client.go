@@ -1,6 +1,7 @@
 package exchange
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -12,7 +13,8 @@ import (
 
 const baseURL = "wss://stream.binance.com:9443/stream?streams="
 
-func Connect(symbols []string, dataChan chan<- CombinedStreamEvent) {
+// ✨ CHANGED: Injected context.Context to listen for shutdown signals
+func Connect(ctx context.Context, symbols []string, dataChan chan<- CombinedStreamEvent) {
 	streamParams := make([]string, len(symbols))
 	for i, s := range symbols {
 		streamParams[i] = fmt.Sprintf("%s@trade", strings.ToLower(s))
@@ -29,10 +31,23 @@ func Connect(symbols []string, dataChan chan<- CombinedStreamEvent) {
 
 	log.Println("Connected! Streaming to channel...")
 
+	// ✨ NEW: Background listener for shutdown context
+	// The easiest way to break a blocking websocket ReadMessage() is to close the connection
+	go func() {
+		<-ctx.Done()
+		log.Println("[INFO] Application shutdown detected. Closing Binance WebSocket...")
+		c.Close() // This will force c.ReadMessage() below to return an error instantly
+	}()
+
 	for {
 		_, message, err := c.ReadMessage()
 		if err != nil {
-			log.Println("Read error:", err)
+			// Check if this error was caused by our deliberate graceful shutdown
+			if ctx.Err() != nil {
+				log.Println("[INFO] Binance WebSocket read loop terminated gracefully.")
+				return
+			}
+			log.Println("[WARN] Read error:", err)
 			time.Sleep(2 * time.Second)
 			continue
 		}
@@ -43,8 +58,6 @@ func Connect(symbols []string, dataChan chan<- CombinedStreamEvent) {
 			continue
 		}
 
-		// Non-blocking send: If the channel is full, we drop the message.
-		// This prevents the WebSocket from disconnecting if RabbitMQ gets slow.
 		select {
 		case dataChan <- event:
 		default:

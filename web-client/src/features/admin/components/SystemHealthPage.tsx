@@ -18,8 +18,9 @@ import {
   ArrowClockwise16Regular,
   Warning24Regular,
   CheckmarkCircle24Regular,
+  DataTrending24Regular,
+  Server24Regular,
 } from "@fluentui/react-icons";
-// ✨ Fixed Import Path
 import {
   systemService,
   type SystemHealthResponse,
@@ -43,7 +44,7 @@ const useStyles = makeStyles({
   },
   grid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
     ...shorthands.gap("24px"),
   },
   card: {
@@ -55,7 +56,7 @@ const useStyles = makeStyles({
   cardHeader: {
     display: "flex",
     justifyContent: "space-between",
-    alignItems: "center",
+    alignItems: "flex-start",
   },
   iconWrapper: {
     width: "48px",
@@ -72,6 +73,13 @@ const useStyles = makeStyles({
     alignItems: "center",
     minHeight: "400px",
     ...shorthands.gap("16px"),
+  },
+  metricsRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    ...shorthands.padding("8px", "0"),
+    ...shorthands.borderBottom("1px", "solid", tokens.colorNeutralStroke2),
   },
 });
 
@@ -91,26 +99,22 @@ export const SystemHealthPage = () => {
     } catch (err) {
       console.error("Health check failed", err);
       setError("Failed to reach API Gateway. The .NET service might be down.");
-      // Keep previous health state if possible, just show error
     }
   };
 
   useEffect(() => {
     fetchHealth();
-
-    // Poll every 3 seconds for a live heartbeat
     let intervalId: any;
     if (isPolling) {
       intervalId = setInterval(fetchHealth, 3000);
     }
-
     return () => clearInterval(intervalId);
   }, [isPolling]);
 
   if (!health && !error) {
     return (
       <div className={styles.centerState}>
-        <Spinner size="large" label="Pinging Microservices..." />
+        <Spinner size="large" label="Aggregating Polyglot Telemetry..." />
       </div>
     );
   }
@@ -122,7 +126,7 @@ export const SystemHealthPage = () => {
       <div className={styles.headerSection}>
         <div>
           <Text size={800} weight="bold" as="h1">
-            System Observability
+            Enterprise Control Plane
           </Text>
           <div
             style={{
@@ -170,7 +174,7 @@ export const SystemHealthPage = () => {
                   size={200}
                   style={{ color: tokens.colorNeutralForeground3 }}
                 >
-                  Gateway Latency: {health.responseTimeMs}ms
+                  BFF Latency: {health.responseTimeMs}ms
                 </Text>
               </>
             )}
@@ -206,10 +210,12 @@ export const SystemHealthPage = () => {
             <Badge
               appearance="filled"
               color={
-                health?.components.postgreSQL === "Up" ? "success" : "danger"
+                health?.infrastructure.postgreSQL === "Up"
+                  ? "success"
+                  : "danger"
               }
             >
-              {health?.components.postgreSQL || "Unknown"}
+              {health?.infrastructure.postgreSQL || "Unknown"}
             </Badge>
           </div>
           <div>
@@ -235,12 +241,10 @@ export const SystemHealthPage = () => {
             <Badge
               appearance="filled"
               color={
-                health?.components.redisReadModel === "Up"
-                  ? "success"
-                  : "danger"
+                health?.infrastructure.redis === "Up" ? "success" : "danger"
               }
             >
-              {health?.components.redisReadModel || "Unknown"}
+              {health?.infrastructure.redis || "Unknown"}
             </Badge>
           </div>
           <div>
@@ -254,7 +258,65 @@ export const SystemHealthPage = () => {
           </div>
         </Card>
 
-        {/* Go Market Gateway */}
+        {/* RabbitMQ Message Broker */}
+        <Card className={styles.card}>
+          <div className={styles.cardHeader}>
+            <div
+              className={styles.iconWrapper}
+              style={{
+                backgroundColor: tokens.colorPaletteDarkOrangeBackground2,
+              }}
+            >
+              <DataTrending24Regular
+                color={tokens.colorPaletteDarkOrangeForeground2}
+              />
+            </div>
+            <Badge
+              appearance="filled"
+              color={
+                health?.infrastructure.rabbitMQ === "Online"
+                  ? "success"
+                  : "danger"
+              }
+            >
+              {health?.infrastructure.rabbitMQ || "Unknown"}
+            </Badge>
+          </div>
+          <div>
+            <Text size={500} weight="semibold">
+              RabbitMQ Broker
+            </Text>
+            <br />
+            <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+              Event-Driven Backbone
+            </Text>
+          </div>
+          <div className={styles.metricsRow}>
+            <Text size={300}>Trade Engine Queue Depth</Text>
+            <Text
+              weight="bold"
+              style={{
+                color:
+                  health?.infrastructure.rabbitMqTradeEventsQueueDepth! > 1000
+                    ? tokens.colorPaletteRedForeground1
+                    : tokens.colorNeutralForeground1,
+              }}
+            >
+              {health?.infrastructure.rabbitMqTradeEventsQueueDepth || 0} msgs
+            </Text>
+          </div>
+          <div className={styles.metricsRow}>
+            <Text size={300}>Delivery Throughput</Text>
+            <Text
+              weight="bold"
+              style={{ color: tokens.colorPaletteGreenForeground1 }}
+            >
+              {health?.infrastructure.rabbitMqMessageRate || 0} msgs/sec
+            </Text>
+          </div>
+        </Card>
+
+        {/* Go Market Gateway Deep Metrics */}
         <Card className={styles.card}>
           <div className={styles.cardHeader}>
             <div
@@ -263,16 +325,36 @@ export const SystemHealthPage = () => {
             >
               <ArrowSwap24Regular color={tokens.colorPaletteTealForeground2} />
             </div>
-            <Badge
-              appearance="filled"
-              color={
-                health?.components.goMarketGateway === "Connected"
-                  ? "success"
-                  : "danger"
-              }
+            {/* ✨ FIX: Render BOTH HTTP and gRPC Connection states explicitly! */}
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "6px",
+                alignItems: "flex-end",
+              }}
             >
-              {health?.components.goMarketGateway || "Unknown"}
-            </Badge>
+              <Badge
+                appearance="filled"
+                color={
+                  health?.infrastructure.goMarketGateway === "Connected"
+                    ? "success"
+                    : "danger"
+                }
+              >
+                gRPC: {health?.infrastructure.goMarketGateway || "Unknown"}
+              </Badge>
+              <Badge
+                appearance="tint"
+                color={
+                  health?.goGatewayMetrics.status === "Online"
+                    ? "success"
+                    : "danger"
+                }
+              >
+                HTTP: {health?.goGatewayMetrics.status || "Offline"}
+              </Badge>
+            </div>
           </div>
           <div>
             <Text size={500} weight="semibold">
@@ -283,46 +365,57 @@ export const SystemHealthPage = () => {
               HTTP/2 gRPC Streaming Link
             </Text>
           </div>
+          <div className={styles.metricsRow}>
+            <Text size={300}>Active Goroutines</Text>
+            <Text weight="bold">
+              {health?.goGatewayMetrics.goroutines || 0}
+            </Text>
+          </div>
+          <div className={styles.metricsRow}>
+            <Text size={300}>Heap Memory Allocated</Text>
+            <Text weight="bold">
+              {health?.goGatewayMetrics.memoryAllocMb || 0} MB
+            </Text>
+          </div>
         </Card>
 
-        {/* AI Circuit Breaker (Polly) */}
+        {/* .NET Trade Engine Deep Metrics */}
         <Card className={styles.card}>
           <div className={styles.cardHeader}>
             <div
               className={styles.iconWrapper}
-              style={{ backgroundColor: tokens.colorPalettePlumBackground2 }}
+              style={{ backgroundColor: tokens.colorPalettePurpleBackground2 }}
             >
-              <Bot24Regular color={tokens.colorPalettePlumForeground2} />
+              <Server24Regular color={tokens.colorPalettePurpleForeground2} />
             </div>
-            <Badge
-              appearance="filled"
-              color={
-                health?.components.aiCircuitBreaker === "Closed"
-                  ? "success"
-                  : health?.components.aiCircuitBreaker === "HalfOpen"
-                    ? "warning"
-                    : "danger"
-              }
-            >
-              {health?.components.aiCircuitBreaker || "Unknown"}
+            <Badge appearance="filled" color="success">
+              Engine Online
             </Badge>
           </div>
           <div>
             <Text size={500} weight="semibold">
-              AI Analyst Circuit
+              .NET Matching Engine
             </Text>
             <br />
             <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-              {health?.components.aiCircuitBreaker === "Closed"
-                ? "Circuit Closed (Traffic Flowing)"
-                : health?.components.aiCircuitBreaker === "Open"
-                  ? "Circuit Open (Traffic Blocked - Fail Fast)"
-                  : "Circuit Half-Open (Testing Recovery)"}
+              C# RAM Matcher & ThreadPool
+            </Text>
+          </div>
+          <div className={styles.metricsRow}>
+            <Text size={300}>Available Worker Threads</Text>
+            <Text weight="bold">
+              {health?.dotNetMetrics.availableWorkerThreads || 0}
+            </Text>
+          </div>
+          <div className={styles.metricsRow}>
+            <Text size={300}>GC Total Memory</Text>
+            <Text weight="bold">
+              {health?.dotNetMetrics.garbageCollectionAllocatedMb || 0} MB
             </Text>
           </div>
         </Card>
 
-        {/* SignalR WebSockets */}
+        {/* Real-Time WebSockets */}
         <Card className={styles.card}>
           <div className={styles.cardHeader}>
             <div
@@ -338,7 +431,7 @@ export const SystemHealthPage = () => {
               weight="bold"
               style={{ color: tokens.colorPaletteGreenForeground1 }}
             >
-              {health?.components.activeSignalRConnections || 0}
+              {health?.dotNetMetrics.activeSignalRConnections || 0}
             </Text>
           </div>
           <div>
@@ -347,8 +440,54 @@ export const SystemHealthPage = () => {
             </Text>
             <br />
             <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-              Real-time SignalR Connections
+              Global SignalR Hub Connections
             </Text>
+          </div>
+        </Card>
+
+        {/* AI Analyst Circuit */}
+        <Card className={styles.card}>
+          <div className={styles.cardHeader}>
+            <div
+              className={styles.iconWrapper}
+              style={{ backgroundColor: tokens.colorPalettePlumBackground2 }}
+            >
+              <Bot24Regular color={tokens.colorPalettePlumForeground2} />
+            </div>
+            <Badge
+              appearance="filled"
+              color={
+                health?.infrastructure.aiAnalyst === "Online"
+                  ? "success"
+                  : "danger"
+              }
+            >
+              {health?.infrastructure.aiAnalyst || "Offline"}
+            </Badge>
+          </div>
+          <div>
+            <Text size={500} weight="semibold">
+              AI Sentiment Analyst
+            </Text>
+            <br />
+            <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+              HuggingFace FinBERT via FastAPI
+            </Text>
+          </div>
+          <div className={styles.metricsRow} style={{ borderBottom: "none" }}>
+            <Text size={300}>Polly Circuit State</Text>
+            <Badge
+              appearance="outline"
+              color={
+                health?.infrastructure.aiCircuitBreaker === "Closed"
+                  ? "success"
+                  : health?.infrastructure.aiCircuitBreaker === "HalfOpen"
+                    ? "warning"
+                    : "danger"
+              }
+            >
+              {health?.infrastructure.aiCircuitBreaker}
+            </Badge>
           </div>
         </Card>
       </div>

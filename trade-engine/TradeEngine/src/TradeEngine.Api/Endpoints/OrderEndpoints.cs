@@ -1,6 +1,7 @@
 using MediatR;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
+using TradeEngine.Application.Constants;
 using TradeEngine.Application.DTOs.Order;
 using TradeEngine.Application.DTOs.Trade;
 using TradeEngine.Application.Features.Orders.CancelOrder;
@@ -17,7 +18,8 @@ public static class OrderEndpoints
     {
         var group = app.MapGroup("/orders")
                        .WithTags("Orders")
-                       .RequireAuthorization();
+                       .RequireAuthorization()
+                       .RequireRateLimiting(PolicyConstants.OrderPlacement);;
 
         group.MapPost("/", PlaceOrderAsync).WithName("PlaceOrder");
         group.MapGet("/open", GetOpenOrdersAsync).WithName("GetOpenOrders");

@@ -92,10 +92,13 @@ services:
       - RabbitMq__Port=5672
       - RabbitMq__Username=user
       - RabbitMq__Password=password
+      - RabbitMq__ManagementUrl=http://rabbitmq:15672/api/queues/%2f/trade_engine_queue
       - Otlp__Endpoint=http://otel-collector:4317
       - Otlp__ServiceName=thesis-trade-engine
       - Otlp__ServiceVersion=v0.4.0
       - MarketGateway__Url=http://ingestor:50051
+      - MarketGateway__HealthUrl=http://ingestor:8081/healthz
+      - AiAnalyst__HealthUrl=http://ai-analyst:8000/healthz
     networks:
       - thesis-network
 

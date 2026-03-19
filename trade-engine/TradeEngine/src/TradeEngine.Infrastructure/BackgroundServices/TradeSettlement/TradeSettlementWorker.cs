@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using TradeEngine.Application.DTOs.Wallet;
 using TradeEngine.Application.Interfaces;
 using TradeEngine.Domain.Entities;
 using TradeEngine.Domain.Enums;
@@ -27,23 +28,19 @@ public class TradeSettlementWorker(
                 using var scope = scopeFactory.CreateScope();
                 var db = scope.ServiceProvider.GetRequiredService<TradeEngineDbContext>();
                 var tradeNotifier = scope.ServiceProvider.GetRequiredService<ITradeNotifier>();
+                
+                var redisService = scope.ServiceProvider.GetRequiredService<IRedisReadModelService>();
 
-                // ✨ Create the Execution Strategy
                 var strategy = db.Database.CreateExecutionStrategy();
 
-                // ✨ Wrap the entire database operation in the resilient execution block
                 await strategy.ExecuteAsync(async () => 
                 {
-                    // 1. Fetch data WITHOUT tracking
                     var order = await db.Orders.AsNoTracking().SingleOrDefaultAsync(o => o.Id == command.OrderId, stoppingToken);
                     
-                    // NOTE: Because we are inside a lambda, we use 'return' instead of 'continue'
                     if (order == null || order.Status != OrderStatus.Pending) return; 
 
-                    // Begin a true, low-level database transaction
                     using var transaction = await db.Database.BeginTransactionAsync(stoppingToken);
 
-                    // 2. ATOMIC ORDER UPDATE
                     var updatedCount = await db.Orders
                         .Where(o => o.Id == order.Id && o.Status == OrderStatus.Pending)
                         .ExecuteUpdateAsync(s => s
@@ -54,7 +51,6 @@ public class TradeSettlementWorker(
 
                     if (updatedCount == 0) return; 
 
-                    // 3. PREPARE WALLET DATA
                     var wallet = await db.Wallets
                         .Include(w => w.Balances)
                         .AsNoTracking()
@@ -71,7 +67,6 @@ public class TradeSettlementWorker(
                         
                     decimal baseAmountChange = order.Side == OrderSide.Buy ? order.Quantity : 0;
 
-                    // 4. ATOMIC BALANCE UPDATES
                     async Task UpsertBalanceAsync(string currency, decimal amount)
                     {
                         if (amount <= 0) return;
@@ -115,15 +110,25 @@ public class TradeSettlementWorker(
                     };
 
                     db.Set<TradeOutboxMessage>().Add(outboxMessage);
-                    
                     await db.SaveChangesAsync(stoppingToken);
 
-                    // Commit the entire unit of work securely
                     await transaction.CommitAsync(stoppingToken);
 
                     logger.LogInformation("✅ Settlement Complete: Order {Id} Filled at ${Price}", order.Id, command.ExecutionPrice);
                     
-                    // Fire SignalR Toast
+                    try 
+                    {
+                        await redisService.RemoveOpenOrderAsync(order.UserId, order.Id, stoppingToken);
+                        
+                        var balances = wallet.Balances.Select(b => new AssetBalanceDto(b.Currency, b.Amount)).ToList();
+                        var walletResponse = new WalletResponse(wallet.Id, balances);
+                        await redisService.UpdateUserPortfolioAsync(order.UserId, walletResponse, stoppingToken);
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogWarning(ex, "⚠️ Synchronous Redis update failed. UI may experience a slight delay.");
+                    }
+
                     _ = tradeNotifier.NotifyOrderFilledAsync(order.UserId, order.Symbol, order.Quantity, command.ExecutionPrice);
                 });
             }

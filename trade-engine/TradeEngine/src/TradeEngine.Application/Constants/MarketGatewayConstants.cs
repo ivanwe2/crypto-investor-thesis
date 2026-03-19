@@ -3,5 +3,9 @@ namespace TradeEngine.Application.Constants;
 public static class MarketGatewayConstants
 {
     public const string UrlConfigKey = "MarketGateway:Url";
-    public const string DefaultUrl = "http://ingestor:50051";
+    
+    public const string HealthUrlConfigKey = "MarketGateway:HealthUrl";
+
+    public const string DefaultUrl = "http://localhost:50051";
+    public const string DefaultHealthUrl = "http://localhost:8081/healthz";
 }
