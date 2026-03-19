@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
 using Asp.Versioning;
 using Grpc.Core;
@@ -41,7 +43,7 @@ public static class EndpointExtensions
 
     public static void MapSystemEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/system").WithTags("System Health");
+       var group = app.MapGroup("/system").WithTags("System Health");
 
         group.MapGet("/health", async (
             TradeEngineDbContext db,
@@ -57,19 +59,16 @@ public static class EndpointExtensions
             httpClient.Timeout = TimeSpan.FromSeconds(2); 
 
             bool isDbHealthy = await db.Database.CanConnectAsync();
-
             bool isRedisHealthy = redis.IsConnected;
 
             string grpcStatus = "Disconnected";
             try 
             {
                 var deadline = DateTime.UtcNow.AddSeconds(1);
-                await grpcClient.GetMarketSnapshotAsync(
-                    new SnapshotRequest { Symbol = "BTCUSDT" }, 
-                    deadline: deadline);
+                await grpcClient.GetMarketSnapshotAsync(new SnapshotRequest { Symbol = "BTCUSDT" }, deadline: deadline);
                 grpcStatus = "Connected";
             } 
-            catch (RpcException) { grpcStatus = "Unreachable"; }
+            catch (RpcException ex) { grpcStatus = $"gRPC Error: {ex.StatusCode}"; }
 
             var goMetrics = new { Goroutines = 0, MemoryAllocMb = 0, MemorySysMb = 0, Status = "Offline" };
             try
@@ -88,43 +87,73 @@ public static class EndpointExtensions
                         Status = "Online"
                     };
                 }
+                else goMetrics = goMetrics with { Status = $"HTTP {goResponse.StatusCode}" };
             }
-            catch { /* Ignore, defaults to Offline */ }
+            catch (Exception ex) { goMetrics = goMetrics with { Status = ex.Message }; }
 
             string aiStatus = "Unreachable";
             try
             {
                 var aiHealthUrl = config[AiAnalystConstants.HealthUrlConfigKey] ?? AiAnalystConstants.DefaultHealthUrl;
                 var aiResponse = await httpClient.GetAsync(aiHealthUrl);
-                if (aiResponse.IsSuccessStatusCode)
-                {
-                    aiStatus = "Online";
-                }
+                aiStatus = aiResponse.IsSuccessStatusCode ? "Online" : $"HTTP {aiResponse.StatusCode}";
             }
-            catch { /* Ignore, defaults to Unreachable */ }
+            catch (Exception ex) { aiStatus = ex.Message; }
 
             int tradeEventsQueueDepth = 0;
+            double messageRate = 0;
             string rabbitStatus = "Unreachable";
             try
             {
                 var rabbitUrl = config[RabbitMqConstants.ManagementUrlConfigKey] ?? RabbitMqConstants.DefaultManagementUrl;
-                var rabbitResp = await httpClient.GetAsync(rabbitUrl);
+                var rabbitUser = config[RabbitMqConstants.UsernameConfigKey] ?? RabbitMqConstants.DefaultUsername;
+                var rabbitPass = config[RabbitMqConstants.PasswordConfigKey] ?? RabbitMqConstants.DefaultPassword;
+
+                var request = new HttpRequestMessage(HttpMethod.Get, rabbitUrl);
+                var authString = Convert.ToBase64String(Encoding.ASCII.GetBytes($"{rabbitUser}:{rabbitPass}"));
+                request.Headers.Authorization = new AuthenticationHeaderValue("Basic", authString);
+
+                var rabbitResp = await httpClient.SendAsync(request);
                 if (rabbitResp.IsSuccessStatusCode)
                 {
                     var rabbitContent = await rabbitResp.Content.ReadAsStringAsync();
                     var parsed = JsonSerializer.Deserialize<JsonElement>(rabbitContent);
+                    
+                    // Get Backlog (Traffic Jam)
                     if (parsed.TryGetProperty("messages_ready", out var messages))
                     {
                         tradeEventsQueueDepth = messages.GetInt32();
                     }
+                    
+                    // Get Throughput (Speedometer)
+                    if (parsed.TryGetProperty("message_stats", out var stats))
+                    {
+                        if (stats.TryGetProperty("deliver_get_details", out var deliverDetails) && 
+                            deliverDetails.TryGetProperty("rate", out var rate))
+                        {
+                            messageRate = rate.GetDouble();
+                        }
+                        else if (stats.TryGetProperty("publish_details", out var pubDetails) && 
+                                 pubDetails.TryGetProperty("rate", out var pubRate))
+                        {
+                            messageRate = pubRate.GetDouble();
+                        }
+                    }
+                    
                     rabbitStatus = "Online";
                 }
+                else
+                {
+                    rabbitStatus = $"HTTP {rabbitResp.StatusCode}";
+                }
             }
-            catch { /* Ignore, defaults to 0 and Unreachable */ }
+            catch (Exception ex) 
+            { 
+                rabbitStatus = ex.Message; 
+            }
 
-            ThreadPool.GetAvailableThreads(out int workerThreads, out int completionPortThreads);
+            ThreadPool.GetAvailableThreads(out int workerThreads, out int _);
             var process = Process.GetCurrentProcess();
-
             sw.Stop();
 
             var healthReport = new 
@@ -139,8 +168,10 @@ public static class EndpointExtensions
                     Redis = isRedisHealthy ? "Up" : "Down",
                     RabbitMQ = rabbitStatus,
                     RabbitMqTradeEventsQueueDepth = tradeEventsQueueDepth,
+                    RabbitMqMessageRate = Math.Round(messageRate, 1),
                     AiAnalyst = aiStatus,
-                    AiCircuitBreaker = aiCircuitBreaker.CircuitState.ToString()
+                    AiCircuitBreaker = aiCircuitBreaker.CircuitState.ToString(),
+                    GoMarketGateway = grpcStatus 
                 },
 
                 DotNetMetrics = new

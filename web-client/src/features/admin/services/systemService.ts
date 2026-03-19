@@ -10,8 +10,10 @@ export interface SystemHealthResponse {
     redis: string;
     rabbitMQ: string;
     rabbitMqTradeEventsQueueDepth: number;
+    rabbitMqMessageRate: number;
     aiAnalyst: string;
     aiCircuitBreaker: string;
+    goMarketGateway: string;
   };
   dotNetMetrics: {
     activeSignalRConnections: number;

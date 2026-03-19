@@ -19,5 +19,5 @@ public static class RabbitMqConstants
     public const string DefaultUsername = "user";
     public const string DefaultPassword = "password";
     
-    public const string DefaultManagementUrl = "http://user:password@localhost:15672/api/queues/%2f/trade_events";
+    public const string DefaultManagementUrl = "http://localhost:15672/api/queues/%2f/trade_engine_queue";
 }

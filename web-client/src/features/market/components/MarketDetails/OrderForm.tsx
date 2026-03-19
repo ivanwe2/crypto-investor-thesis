@@ -1,4 +1,7 @@
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
 import {
   Button,
   Card,
@@ -13,14 +16,43 @@ import {
   Tab,
   makeStyles,
   shorthands,
+  Field,
 } from "@fluentui/react-components";
 import { orderService } from "../../../trading/services/orderService";
 import { useNotificationStore } from "../../../../shared/store/notificationStore";
 
+const orderSchema = z
+  .object({
+    orderType: z.enum(["Limit", "Market"]),
+    side: z.enum(["Buy", "Sell"]),
+    quantity: z
+      .string()
+      .refine((val) => !isNaN(Number(val)) && Number(val) > 0, {
+        message: "Quantity must be greater than 0",
+      }),
+    targetPrice: z.string().optional(),
+  })
+  .refine(
+    (data) => {
+      if (data.orderType === "Limit") {
+        return (
+          !!data.targetPrice &&
+          !isNaN(Number(data.targetPrice)) &&
+          Number(data.targetPrice) > 0
+        );
+      }
+      return true;
+    },
+    {
+      message: "Limit Price must be greater than 0",
+      path: ["targetPrice"],
+    },
+  );
+
+type OrderFormValues = z.infer<typeof orderSchema>;
+
 const useStyles = makeStyles({
-  card: {
-    backgroundColor: tokens.colorNeutralBackground1Hover,
-  },
+  card: { backgroundColor: tokens.colorNeutralBackground1Hover },
   formBody: {
     display: "flex",
     flexDirection: "column",
@@ -41,9 +73,7 @@ const useStyles = makeStyles({
   clickableText: {
     color: tokens.colorBrandForeground1,
     cursor: "pointer",
-    ":hover": {
-      textDecorationLine: "underline",
-    },
+    ":hover": { textDecorationLine: "underline" },
   },
 });
 
@@ -55,58 +85,58 @@ export const OrderForm = ({
   currentPrice: number;
 }) => {
   const styles = useStyles();
-  const [orderType, setOrderType] = useState<"Limit" | "Market">("Limit");
-  const [side, setSide] = useState<"Buy" | "Sell">("Buy");
-  const [quantity, setQuantity] = useState("1");
-  const [targetPrice, setTargetPrice] = useState(
-    currentPrice?.toString() || "",
-  );
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // ✨ Global Toast Store!
   const { addNotification } = useNotificationStore();
 
-  // Keep target price synced with current price initially
+  const {
+    control,
+    handleSubmit,
+    watch,
+    setValue,
+    formState: { errors, isSubmitting },
+  } = useForm<OrderFormValues>({
+    resolver: zodResolver(orderSchema),
+    defaultValues: {
+      orderType: "Limit",
+      side: "Buy",
+      quantity: "1", // Now strictly strings to match HTML inputs
+      targetPrice: currentPrice ? currentPrice.toString() : "",
+    },
+    mode: "onTouched",
+  });
+
+  const watchOrderType = watch("orderType");
+  const watchSide = watch("side");
+  const watchQuantity = watch("quantity");
+  const watchTargetPrice = watch("targetPrice");
+
   useEffect(() => {
-    if (currentPrice && targetPrice === "" && orderType === "Limit") {
-      setTargetPrice(currentPrice.toString());
+    if (currentPrice && !watchTargetPrice && watchOrderType === "Limit") {
+      setValue("targetPrice", currentPrice.toString(), {
+        shouldValidate: true,
+      });
     }
-  }, [currentPrice, targetPrice, orderType]);
+  }, [currentPrice, watchTargetPrice, watchOrderType, setValue]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    const qty = Number(quantity);
-    const price = Number(targetPrice);
-    const typeEnum = orderType === "Market" ? 1 : 2;
-    const sideEnum = side === "Buy" ? 1 : 2;
-
-    // Pre-flight Validation
-    if (qty <= 0) {
-      addNotification("Quantity must be greater than 0", "error");
-      return;
-    }
-    if (typeEnum === 2 && price <= 0) {
-      addNotification("Limit Price must be greater than 0", "error");
-      return;
-    }
-
-    setIsSubmitting(true);
+  const onSubmit = async (data: OrderFormValues) => {
+    // ✨ FIX 3: Explicitly type as 1 | 2 to perfectly match the .NET Enums
+    const typeEnum: 1 | 2 = data.orderType === "Market" ? 1 : 2;
+    const sideEnum: 1 | 2 = data.side === "Buy" ? 1 : 2;
+    const parsedQty = Number(data.quantity);
+    const parsedPrice = data.targetPrice ? Number(data.targetPrice) : undefined;
 
     try {
       await orderService.placeOrder({
         symbol,
         side: sideEnum,
         type: typeEnum,
-        quantity: qty,
-        // Send undefined for market orders, just like the old TradePanel
-        targetPrice: typeEnum === 2 ? price : undefined,
+        quantity: parsedQty,
+        targetPrice: typeEnum === 2 ? parsedPrice : undefined,
       });
 
-      const priceText = typeEnum === 1 ? "Market Price" : `@ $${price}`;
+      const priceText = typeEnum === 1 ? "Market Price" : `@ $${parsedPrice}`;
       addNotification(
-        `${orderType} order submitted: ${side} ${qty} ${symbol} ${priceText}`,
-        "info",
+        `${data.orderType} order submitted: ${data.side} ${parsedQty} ${symbol} ${priceText}`,
+        "success",
       );
     } catch (error: any) {
       console.error("Order failed", error);
@@ -116,15 +146,13 @@ export const OrderForm = ({
           "Failed to place order.",
         "error",
       );
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
-  const isBuy = side === "Buy";
+  const isBuy = watchSide === "Buy";
   const effectivePrice =
-    orderType === "Limit" ? Number(targetPrice) : currentPrice;
-  const estimatedTotal = (Number(quantity) || 0) * (effectivePrice || 0);
+    watchOrderType === "Limit" ? Number(watchTargetPrice) || 0 : currentPrice;
+  const estimatedTotal = (Number(watchQuantity) || 0) * (effectivePrice || 0);
 
   return (
     <Card className={styles.card}>
@@ -136,81 +164,106 @@ export const OrderForm = ({
         }
       />
 
-      <TabList
-        selectedValue={orderType}
-        onTabSelect={(_, data) =>
-          setOrderType(data.value as "Limit" | "Market")
-        }
-        style={{ marginBottom: "8px" }}
-      >
-        <Tab value="Limit">Limit</Tab>
-        <Tab value="Market">Market</Tab>
-      </TabList>
+      <Controller
+        name="orderType"
+        control={control}
+        render={({ field }) => (
+          <TabList
+            selectedValue={field.value}
+            onTabSelect={(_, data) => field.onChange(data.value)}
+            style={{ marginBottom: "8px" }}
+          >
+            <Tab value="Limit">Limit</Tab>
+            <Tab value="Market">Market</Tab>
+          </TabList>
+        )}
+      />
 
-      <form onSubmit={handleSubmit} className={styles.formBody}>
-        <RadioGroup
-          value={side}
-          onChange={(_, d) => setSide(d.value as "Buy" | "Sell")}
-          layout="horizontal"
-        >
-          <Radio
-            value="Buy"
-            label={
-              <Text
-                style={{
-                  color: tokens.colorPaletteGreenForeground1,
-                  fontWeight: side === "Buy" ? "bold" : "normal",
-                }}
-              >
-                Buy
-              </Text>
-            }
-          />
-          <Radio
-            value="Sell"
-            label={
-              <Text
-                style={{
-                  color: tokens.colorPaletteRedForeground1,
-                  fontWeight: side === "Sell" ? "bold" : "normal",
-                }}
-              >
-                Sell
-              </Text>
-            }
-          />
-        </RadioGroup>
+      <form onSubmit={handleSubmit(onSubmit)} className={styles.formBody}>
+        <Controller
+          name="side"
+          control={control}
+          render={({ field }) => (
+            <RadioGroup
+              value={field.value}
+              onChange={(_, d) => field.onChange(d.value)}
+              layout="horizontal"
+            >
+              <Radio
+                value="Buy"
+                label={
+                  <Text
+                    style={{
+                      color: tokens.colorPaletteGreenForeground1,
+                      fontWeight: field.value === "Buy" ? "bold" : "normal",
+                    }}
+                  >
+                    Buy
+                  </Text>
+                }
+              />
+              <Radio
+                value="Sell"
+                label={
+                  <Text
+                    style={{
+                      color: tokens.colorPaletteRedForeground1,
+                      fontWeight: field.value === "Sell" ? "bold" : "normal",
+                    }}
+                  >
+                    Sell
+                  </Text>
+                }
+              />
+            </RadioGroup>
+          )}
+        />
 
-        {orderType === "Limit" && (
-          <div>
-            <div className={styles.priceRow}>
-              <Text
-                size={200}
-                style={{ color: tokens.colorNeutralForeground3 }}
+        {watchOrderType === "Limit" && (
+          <Controller
+            name="targetPrice"
+            control={control}
+            render={({ field }) => (
+              <Field
+                validationMessage={errors.targetPrice?.message}
+                validationState={errors.targetPrice ? "error" : "none"}
               >
-                Limit Price (USD)
-              </Text>
-              <Text
-                size={200}
-                className={styles.clickableText}
-                onClick={() => setTargetPrice(currentPrice.toString())}
-                title="Click to copy current price"
-              >
-                Use Last: ${currentPrice?.toLocaleString() || "0.00"}
-              </Text>
-            </div>
-            <Input
-              type="number"
-              step="0.01"
-              value={targetPrice}
-              onChange={(_, data) => setTargetPrice(data.value)}
-              style={{ width: "100%" }}
-              required={orderType === "Limit"}
-            />
-          </div>
+                <div className={styles.priceRow}>
+                  <Text
+                    size={200}
+                    style={{ color: tokens.colorNeutralForeground3 }}
+                  >
+                    Limit Price (USD)
+                  </Text>
+                  <Text
+                    size={200}
+                    className={styles.clickableText}
+                    onClick={() =>
+                      setValue("targetPrice", currentPrice.toString(), {
+                        shouldValidate: true,
+                      })
+                    }
+                    title="Click to copy current price"
+                  >
+                    Use Last: ${currentPrice?.toLocaleString() || "0.00"}
+                  </Text>
+                </div>
+                {/* ✨ FIX 4: Explicitly map Fluent UI's onChange to RHF's field.onChange */}
+                <Input
+                  value={field.value}
+                  onChange={(_, data) => field.onChange(data.value)}
+                  onBlur={field.onBlur}
+                  name={field.name}
+                  type="number"
+                  step="0.01"
+                  style={{ width: "100%" }}
+                />
+              </Field>
+            )}
+          />
         )}
 
-        {orderType === "Market" && (
+        {watchOrderType === "Market" && (
           <div className={styles.infoBox}>
             <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
               Executes immediately at the best available market price.
@@ -218,25 +271,38 @@ export const OrderForm = ({
           </div>
         )}
 
-        <div>
-          <div className={styles.priceRow}>
-            <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-              Quantity ({symbol.replace("USDT", "").replace("USD", "")})
-            </Text>
-          </div>
-          <Input
-            type="number"
-            step="0.0001"
-            value={quantity}
-            onChange={(_, data) => setQuantity(data.value)}
-            style={{ width: "100%" }}
-            required
-          />
-        </div>
+        <Controller
+          name="quantity"
+          control={control}
+          render={({ field }) => (
+            <Field
+              validationMessage={errors.quantity?.message}
+              validationState={errors.quantity ? "error" : "none"}
+            >
+              <div className={styles.priceRow}>
+                <Text
+                  size={200}
+                  style={{ color: tokens.colorNeutralForeground3 }}
+                >
+                  Quantity ({symbol.replace("USDT", "").replace("USD", "")})
+                </Text>
+              </div>
+              <Input
+                value={field.value}
+                onChange={(_, data) => field.onChange(data.value)}
+                onBlur={field.onBlur}
+                name={field.name}
+                type="number"
+                step="0.0001"
+                style={{ width: "100%" }}
+              />
+            </Field>
+          )}
+        />
 
         <div className={styles.infoBox}>
           <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-            {orderType === "Market"
+            {watchOrderType === "Market"
               ? "Estimated Total Value"
               : "Total Order Value"}
           </Text>
@@ -264,7 +330,7 @@ export const OrderForm = ({
             transition: "all 0.2s ease",
           }}
         >
-          {isSubmitting ? <Spinner size="tiny" /> : `${side} ${symbol}`}
+          {isSubmitting ? <Spinner size="tiny" /> : `${watchSide} ${symbol}`}
         </Button>
       </form>
     </Card>
