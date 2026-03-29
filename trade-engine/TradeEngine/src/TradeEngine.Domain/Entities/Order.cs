@@ -10,6 +10,7 @@ public class Order
     
     public decimal Quantity { get; private set; }
     public decimal TargetPrice { get; private set; }
+    public decimal? StopPrice { get; private set; }
     public decimal? ExecutionPrice { get; private set; }
     
     public OrderStatus Status { get; private set; }
@@ -18,13 +19,16 @@ public class Order
 
     private Order() { }
 
-    public static Result<Order> Create(Guid userId, string symbol, OrderSide side, OrderType type, decimal quantity, decimal targetPrice = 0)
+    public static Result<Order> Create(Guid userId, string symbol, OrderSide side, OrderType type, decimal quantity, decimal targetPrice = 0, decimal? stopPrice = null)
     {
         if (quantity <= 0)
             return Result<Order>.Failure<Order>(new Error("Order.Invalid", "Quantity must be greater than zero"));
 
         if (type == OrderType.Limit && targetPrice <= 0)
             return Result<Order>.Failure<Order>(new Error("Order.Invalid", "Limit orders must have a positive target price"));
+
+        if ((type == OrderType.StopLoss || type == OrderType.TakeProfit) && (stopPrice == null || stopPrice <= 0))
+                    return Result<Order>.Failure<Order>(new Error("Order.InvalidStop", "Stop-Loss and Take-Profit orders require a positive stop price"));
 
         return new Order
         {
@@ -35,6 +39,7 @@ public class Order
             Type = type,
             Quantity = quantity,
             TargetPrice = targetPrice,
+            StopPrice = stopPrice,
             Status = OrderStatus.Pending,
             CreatedAt = DateTime.UtcNow
         };
