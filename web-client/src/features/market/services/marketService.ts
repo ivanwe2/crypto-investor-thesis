@@ -33,7 +33,9 @@ export const marketService = {
   trackMarket: async (
     symbol: string,
   ): Promise<{ success: boolean; message: string }> => {
-    const response = await apiClient.post(`/markets/${symbol}/track`);
+    const response = await apiClient.post(
+      `${AppConfig.Endpoints.Markets}/${symbol}/track`,
+    );
     return response.data;
   },
 };

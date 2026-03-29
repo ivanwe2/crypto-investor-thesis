@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Card,
@@ -23,6 +23,7 @@ import { useAuthStore } from "../../../auth/store/authStore";
 import { useWatchlistStore } from "../../store/watchlistStore";
 import { marketService } from "../../services/marketService";
 import { SentimentWidget } from "../../../ai/components/SentimentWidget";
+import { PopularMarkets } from "./PopularMarkets";
 
 const useStyles = makeStyles({
   dashboardContainer: {
@@ -85,13 +86,15 @@ export const Dashboard = () => {
   const { symbols: watchList, addSymbol, removeSymbol } = useWatchlistStore();
   const [newSymbol, setNewSymbol] = useState("");
 
+  const joinedSymbols = useRef<Set<string>>(new Set());
+
   useEffect(() => {
     const init = async () => {
       await signalRService.startConnection();
 
-      // ✨ Hydrate both SignalR AND the Go Backend for persisted coins
       for (const symbol of watchList) {
-        signalRService.joinGroup(symbol);
+        if (joinedSymbols.current.has(symbol)) continue;
+        await signalRService.joinGroup(symbol);
         try {
           await marketService.trackMarket(symbol);
         } catch (err) {
@@ -100,27 +103,48 @@ export const Dashboard = () => {
             err,
           );
         }
+        joinedSymbols.current.add(symbol);
       }
     };
+
     init();
-  }, [token, watchList]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
+  useEffect(() => {
+    const syncNewSymbols = async () => {
+      const newSymbols = watchList.filter((s) => !joinedSymbols.current.has(s));
+      if (newSymbols.length === 0) return;
+
+      for (const symbol of newSymbols) {
+        await signalRService.joinGroup(symbol);
+        try {
+          await marketService.trackMarket(symbol);
+        } catch (err) {
+          console.warn(
+            `[Network] Failed to sync ${symbol} with Go Gateway`,
+            err,
+          );
+        }
+        joinedSymbols.current.add(symbol);
+      }
+    };
+
+    syncNewSymbols();
+  }, [watchList]);
 
   const handleAddSymbol = async () => {
-    if (newSymbol) {
-      const symbolToTrack = newSymbol.toUpperCase().trim();
+    if (!newSymbol) return;
+    const symbolToTrack = newSymbol.toUpperCase().trim();
+    setNewSymbol("");
 
-      try {
-        // ✨ Track dynamically on the backend before updating UI state
-        await marketService.trackMarket(symbolToTrack);
-        addSymbol(symbolToTrack);
-        setNewSymbol("");
-      } catch (err) {
-        console.error(`Failed to track market ${symbolToTrack}`, err);
-        // Fallback UI update even if Go fails to acknowledge immediately
-        addSymbol(symbolToTrack);
-        setNewSymbol("");
-      }
+    try {
+      await marketService.trackMarket(symbolToTrack);
+    } catch (err) {
+      console.error(`Failed to track market ${symbolToTrack}`, err);
     }
+
+    addSymbol(symbolToTrack);
   };
 
   return (
@@ -133,6 +157,7 @@ export const Dashboard = () => {
 
       <div className={styles.grid}>
         <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+          {/* Search + quick-add panel */}
           <Card
             style={{ backgroundColor: tokens.colorNeutralBackground1Hover }}
           >
@@ -140,7 +165,7 @@ export const Dashboard = () => {
               <Input
                 value={newSymbol}
                 onChange={(_, d) => setNewSymbol(d.value)}
-                placeholder="Add symbol (e.g. ADAUSDT)"
+                placeholder="Add any symbol (e.g. ADAUSDT)"
                 style={{ flex: 1 }}
                 onKeyDown={(e) => e.key === "Enter" && handleAddSymbol()}
               />
@@ -152,8 +177,12 @@ export const Dashboard = () => {
                 Add Coin
               </Button>
             </div>
+
+            {/* Popular markets quick-pick */}
+            <PopularMarkets />
           </Card>
 
+          {/* Live ticker grid */}
           <div className={styles.tickerGrid}>
             {watchList.map((symbol) => {
               const ticker = tickers[symbol];
@@ -219,9 +248,7 @@ export const Dashboard = () => {
                           color={
                             isUp ? "success" : isDown ? "danger" : "informative"
                           }
-                          style={{
-                            minWidth: "85px",
-                          }}
+                          style={{ minWidth: "85px" }}
                         >
                           {isUp ? "▲" : isDown ? "▼" : "−"}{" "}
                           {ticker.trend.toUpperCase()}
