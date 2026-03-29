@@ -21,9 +21,9 @@ import { signalRService } from "../../../../shared/services/signalRService";
 import { useMarketStore } from "../../store/marketStore";
 import { useAuthStore } from "../../../auth/store/authStore";
 import { useWatchlistStore } from "../../store/watchlistStore";
+import { marketService } from "../../services/marketService";
 import { SentimentWidget } from "../../../ai/components/SentimentWidget";
 
-// ✨ Fluent UI native styling (Replaces Dashboard.module.scss)
 const useStyles = makeStyles({
   dashboardContainer: {
     ...shorthands.padding("24px"),
@@ -88,15 +88,38 @@ export const Dashboard = () => {
   useEffect(() => {
     const init = async () => {
       await signalRService.startConnection();
-      watchList.forEach((symbol) => signalRService.joinGroup(symbol));
+
+      // ✨ Hydrate both SignalR AND the Go Backend for persisted coins
+      for (const symbol of watchList) {
+        signalRService.joinGroup(symbol);
+        try {
+          await marketService.trackMarket(symbol);
+        } catch (err) {
+          console.warn(
+            `[Network] Failed to sync ${symbol} with Go Gateway`,
+            err,
+          );
+        }
+      }
     };
     init();
   }, [token, watchList]);
 
-  const handleAddSymbol = () => {
+  const handleAddSymbol = async () => {
     if (newSymbol) {
-      addSymbol(newSymbol.toUpperCase());
-      setNewSymbol("");
+      const symbolToTrack = newSymbol.toUpperCase().trim();
+
+      try {
+        // ✨ Track dynamically on the backend before updating UI state
+        await marketService.trackMarket(symbolToTrack);
+        addSymbol(symbolToTrack);
+        setNewSymbol("");
+      } catch (err) {
+        console.error(`Failed to track market ${symbolToTrack}`, err);
+        // Fallback UI update even if Go fails to acknowledge immediately
+        addSymbol(symbolToTrack);
+        setNewSymbol("");
+      }
     }
   };
 
@@ -182,7 +205,6 @@ export const Dashboard = () => {
                       </Text>
                     }
                     action={
-                      // ✨ FIXED: Added alignItems: "center" to perfectly align Badge and Button
                       <div
                         style={{
                           display: "flex",
@@ -201,7 +223,8 @@ export const Dashboard = () => {
                             minWidth: "85px",
                           }}
                         >
-                          {isUp ? "▲" : isDown ? "▼" : "−"}{" "}{ticker.trend.toUpperCase()}
+                          {isUp ? "▲" : isDown ? "▼" : "−"}{" "}
+                          {ticker.trend.toUpperCase()}
                         </Badge>
                         <Button
                           icon={<Dismiss16Regular />}

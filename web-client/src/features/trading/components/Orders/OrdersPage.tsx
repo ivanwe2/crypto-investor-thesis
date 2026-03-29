@@ -208,7 +208,7 @@ export const OrdersPage = () => {
                           size={200}
                           style={{ color: tokens.colorNeutralForeground3 }}
                         >
-                          {new Date(order.createdAtUtc).toLocaleString(
+                          {new Date(order.createdAt).toLocaleString(
                             undefined,
                             {
                               month: "short",

@@ -20,22 +20,33 @@ import {
 } from "@fluentui/react-components";
 import { orderService } from "../../../trading/services/orderService";
 import { useNotificationStore } from "../../../../shared/store/notificationStore";
+import { OrderSide, OrderType } from "../../../trading/dtos/OrderDtos";
 
+// ✨ Strict Object Validation: nativeEnum works perfectly with 'as const' objects
 const orderSchema = z.object({
-  orderType: z.enum(["Limit", "Market"]),
-  side: z.enum(["Buy", "Sell"]),
+  orderType: z.nativeEnum(OrderType),
+  side: z.nativeEnum(OrderSide),
   quantity: z.string().refine((val) => !isNaN(Number(val)) && Number(val) > 0, {
     message: "Quantity must be greater than 0",
   }),
   targetPrice: z.string().optional(),
+  stopPrice: z.string().optional(),
 }).refine((data) => {
-  if (data.orderType === "Limit") {
+  if (data.orderType === OrderType.Limit) {
     return !!data.targetPrice && !isNaN(Number(data.targetPrice)) && Number(data.targetPrice) > 0;
   }
   return true;
 }, {
   message: "Limit Price must be greater than 0",
   path: ["targetPrice"],
+}).refine((data) => {
+  if (data.orderType === OrderType.StopLoss || data.orderType === OrderType.TakeProfit) {
+    return !!data.stopPrice && !isNaN(Number(data.stopPrice)) && Number(data.stopPrice) > 0;
+  }
+  return true;
+}, {
+  message: "Trigger Stop Price must be greater than 0",
+  path: ["stopPrice"],
 });
 
 type OrderFormValues = z.infer<typeof orderSchema>;
@@ -64,10 +75,11 @@ export const OrderForm = ({ symbol, currentPrice }: { symbol: string; currentPri
   const { control, handleSubmit, watch, setValue, formState: { errors, isSubmitting } } = useForm<OrderFormValues>({
     resolver: zodResolver(orderSchema),
     defaultValues: {
-      orderType: "Limit",
-      side: "Buy",
+      orderType: OrderType.Limit,
+      side: OrderSide.Buy,
       quantity: "1",
       targetPrice: currentPrice ? currentPrice.toString() : "",
+      stopPrice: "",
     },
     mode: "onTouched",
   });
@@ -78,19 +90,25 @@ export const OrderForm = ({ symbol, currentPrice }: { symbol: string; currentPri
   const watchTargetPrice = watch("targetPrice");
 
   useEffect(() => {
-    if (currentPrice && !watchTargetPrice && watchOrderType === "Limit") {
+    if (currentPrice && !watchTargetPrice && watchOrderType === OrderType.Limit) {
       setValue("targetPrice", currentPrice.toString(), { shouldValidate: true });
     }
   }, [currentPrice, watchTargetPrice, watchOrderType, setValue]);
 
   const onSubmit = async (data: OrderFormValues) => {
-    const typeEnum: 1 | 2 = data.orderType === "Market" ? 1 : 2;
-    const sideEnum: 1 | 2 = data.side === "Buy" ? 1 : 2;
-    const parsedQty = Number(data.quantity);
+    // Safely map the string objects to the C# integer domain
+    const sideEnum = data.side === OrderSide.Buy ? 1 : 2;
     
-    let finalTargetPrice = data.targetPrice ? Number(data.targetPrice) : undefined;
+    let typeEnum = 2; // Limit
+    if (data.orderType === OrderType.Market) typeEnum = 1;
+    if (data.orderType === OrderType.StopLoss) typeEnum = 3;
+    if (data.orderType === OrderType.TakeProfit) typeEnum = 4;
 
-    if (typeEnum === 1) {
+    const parsedQty = Number(data.quantity);
+    let finalTargetPrice = data.targetPrice ? Number(data.targetPrice) : undefined;
+    let finalStopPrice = data.stopPrice ? Number(data.stopPrice) : undefined;
+
+    if (typeEnum === 1) { // Market Order VWAP preview adjustment
         finalTargetPrice = sideEnum === 1 
             ? currentPrice * 1.05 
             : currentPrice * 0.95; 
@@ -102,7 +120,8 @@ export const OrderForm = ({ symbol, currentPrice }: { symbol: string; currentPri
         side: sideEnum,
         type: typeEnum,
         quantity: parsedQty,
-        targetPrice: finalTargetPrice, 
+        targetPrice: finalTargetPrice || 0,
+        stopPrice: [OrderType.StopLoss, OrderType.TakeProfit].includes(data.orderType as any) ? finalStopPrice : undefined, 
       });
 
       const priceText = typeEnum === 1 ? "Market Price" : `@ $${finalTargetPrice}`;
@@ -113,8 +132,8 @@ export const OrderForm = ({ symbol, currentPrice }: { symbol: string; currentPri
     }
   };
 
-  const isBuy = watchSide === "Buy";
-  const effectivePrice = watchOrderType === "Limit" ? (Number(watchTargetPrice) || 0) : currentPrice;
+  const isBuy = watchSide === OrderSide.Buy;
+  const effectivePrice = watchOrderType === OrderType.Limit ? (Number(watchTargetPrice) || 0) : currentPrice;
   const estimatedTotal = (Number(watchQuantity) || 0) * (effectivePrice || 0);
 
   return (
@@ -127,11 +146,13 @@ export const OrderForm = ({ symbol, currentPrice }: { symbol: string; currentPri
         render={({ field }) => (
           <TabList
             selectedValue={field.value}
-            onTabSelect={(_, data) => field.onChange(data.value)}
+            onTabSelect={(_, data) => field.onChange(data.value as OrderType)}
             style={{ marginBottom: "8px" }}
           >
-            <Tab value="Limit">Limit</Tab>
-            <Tab value="Market">Market</Tab>
+            <Tab value={OrderType.Limit}>Limit</Tab>
+            <Tab value={OrderType.Market}>Market</Tab>
+            <Tab value={OrderType.StopLoss}>Stop Loss</Tab>
+            <Tab value={OrderType.TakeProfit}>Take Profit</Tab>
           </TabList>
         )}
       />
@@ -141,14 +162,14 @@ export const OrderForm = ({ symbol, currentPrice }: { symbol: string; currentPri
           name="side"
           control={control}
           render={({ field }) => (
-            <RadioGroup value={field.value} onChange={(_, d) => field.onChange(d.value)} layout="horizontal">
-              <Radio value="Buy" label={<Text style={{ color: tokens.colorPaletteGreenForeground1, fontWeight: field.value === "Buy" ? "bold" : "normal" }}>Buy</Text>} />
-              <Radio value="Sell" label={<Text style={{ color: tokens.colorPaletteRedForeground1, fontWeight: field.value === "Sell" ? "bold" : "normal" }}>Sell</Text>} />
+            <RadioGroup value={field.value} onChange={(_, d) => field.onChange(d.value as OrderSide)} layout="horizontal">
+              <Radio value={OrderSide.Buy} label={<Text style={{ color: tokens.colorPaletteGreenForeground1, fontWeight: field.value === OrderSide.Buy ? "bold" : "normal" }}>Buy</Text>} />
+              <Radio value={OrderSide.Sell} label={<Text style={{ color: tokens.colorPaletteRedForeground1, fontWeight: field.value === OrderSide.Sell ? "bold" : "normal" }}>Sell</Text>} />
             </RadioGroup>
           )}
         />
 
-        {watchOrderType === "Limit" && (
+        {watchOrderType === OrderType.Limit && (
           <Controller
             name="targetPrice"
             control={control}
@@ -174,7 +195,34 @@ export const OrderForm = ({ symbol, currentPrice }: { symbol: string; currentPri
           />
         )}
 
-        {watchOrderType === "Market" && (
+        {/* ✨ CEP Stop Price Input */}
+        {[OrderType.StopLoss, OrderType.TakeProfit].includes(watchOrderType as any) && (
+          <Controller
+            name="stopPrice"
+            control={control}
+            render={({ field }) => (
+              <Field validationMessage={errors.stopPrice?.message} validationState={errors.stopPrice ? "error" : "none"}>
+                <div className={styles.priceRow}>
+                  <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>Trigger Stop Price (USD)</Text>
+                  <Text size={200} className={styles.clickableText} onClick={() => setValue("stopPrice", currentPrice.toString(), { shouldValidate: true })} title="Click to copy current price">
+                    Use Last: ${currentPrice?.toLocaleString() || "0.00"}
+                  </Text>
+                </div>
+                <Input 
+                  value={field.value} 
+                  onChange={(_, data) => field.onChange(data.value)} 
+                  onBlur={field.onBlur}
+                  name={field.name}
+                  type="number" 
+                  step="0.01" 
+                  style={{ width: "100%" }} 
+                />
+              </Field>
+            )}
+          />
+        )}
+
+        {watchOrderType === OrderType.Market && (
           <div className={styles.infoBox}>
             <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>Executes immediately at the best available market price.</Text>
             <br />
@@ -207,7 +255,7 @@ export const OrderForm = ({ symbol, currentPrice }: { symbol: string; currentPri
 
         <div className={styles.infoBox}>
           <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-            {watchOrderType === "Market" ? "Estimated Total Value" : "Total Order Value"}
+            {watchOrderType === OrderType.Market ? "Estimated Total Value" : "Total Order Value"}
           </Text>
           <br />
           <Text weight="bold" size={400}>
