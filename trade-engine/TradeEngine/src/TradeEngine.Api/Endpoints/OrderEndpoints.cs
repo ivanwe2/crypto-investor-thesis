@@ -53,7 +53,8 @@ public static class OrderEndpoints
             request.Side,
             request.Type,
             request.Quantity,
-            request.TargetPrice
+            request.TargetPrice,
+            request.StopPrice
         );
 
         var result = await sender.Send(command, ct);

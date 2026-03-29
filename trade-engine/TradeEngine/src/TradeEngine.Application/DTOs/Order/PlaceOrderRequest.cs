@@ -7,4 +7,5 @@ public record PlaceOrderRequest(
     OrderSide Side, 
     OrderType Type, 
     decimal Quantity, 
-    decimal TargetPrice = 0);
+    decimal TargetPrice = 0,
+    decimal? StopPrice = null);

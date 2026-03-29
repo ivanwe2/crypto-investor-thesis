@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -13,11 +14,40 @@ import (
 
 const baseURL = "wss://stream.binance.com:9443/stream?streams="
 
-// ✨ CHANGED: Injected context.Context to listen for shutdown signals
+// ✨ Thesis Angle 15: Subscription Idempotency
+type SubscriptionManager struct {
+	mu      sync.RWMutex
+	active  map[string]bool
+	subChan chan string
+}
+
+var SubManager = &SubscriptionManager{
+	active:  make(map[string]bool),
+	subChan: make(chan string, 1000), // Buffered channel for dynamic requests
+}
+
+// Subscribe returns true if it's a NEW subscription, false if it's already active O(1)
+func (sm *SubscriptionManager) Subscribe(symbol string) bool {
+	sym := strings.ToLower(symbol)
+
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	if sm.active[sym] {
+		return false
+	}
+
+	sm.active[sym] = true
+	sm.subChan <- sym
+	return true
+}
+
 func Connect(ctx context.Context, symbols []string, dataChan chan<- CombinedStreamEvent) {
 	streamParams := make([]string, len(symbols))
 	for i, s := range symbols {
 		streamParams[i] = fmt.Sprintf("%s@trade", strings.ToLower(s))
+		// Pre-warm the idempotency map with our initial symbols
+		SubManager.active[strings.ToLower(s)] = true
 	}
 	url := baseURL + strings.Join(streamParams, "/")
 
@@ -31,18 +61,37 @@ func Connect(ctx context.Context, symbols []string, dataChan chan<- CombinedStre
 
 	log.Println("Connected! Streaming to channel...")
 
-	// ✨ NEW: Background listener for shutdown context
-	// The easiest way to break a blocking websocket ReadMessage() is to close the connection
+	// ✨ NEW: Background WRITER thread for dynamic subscriptions
+	// Gorilla WebSocket supports one concurrent reader and one concurrent writer
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return // Exit goroutine on shutdown
+			case sym := <-SubManager.subChan:
+				msg := map[string]interface{}{
+					"method": "SUBSCRIBE",
+					"params": []string{sym + "@trade"},
+					"id":     time.Now().UnixMilli(),
+				}
+				if err := c.WriteJSON(msg); err != nil {
+					log.Printf("[ERROR] Failed to send SUBSCRIBE for %s: %v", sym, err)
+				} else {
+					log.Printf("📡 Dynamically Subscribed to new market: %s", sym)
+				}
+			}
+		}
+	}()
+
 	go func() {
 		<-ctx.Done()
 		log.Println("[INFO] Application shutdown detected. Closing Binance WebSocket...")
-		c.Close() // This will force c.ReadMessage() below to return an error instantly
+		c.Close()
 	}()
 
 	for {
 		_, message, err := c.ReadMessage()
 		if err != nil {
-			// Check if this error was caused by our deliberate graceful shutdown
 			if ctx.Err() != nil {
 				log.Println("[INFO] Binance WebSocket read loop terminated gracefully.")
 				return

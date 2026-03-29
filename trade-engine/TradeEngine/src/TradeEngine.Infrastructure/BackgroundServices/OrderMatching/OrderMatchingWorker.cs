@@ -7,6 +7,7 @@ using TradeEngine.Application.Interfaces;
 using TradeEngine.Domain.Entities;
 using TradeEngine.Domain.Enums;
 using TradeEngine.Infrastructure.Persistence;
+using TradeEngine.Infrastructure.Services.Orders;
 using TradeEngine.Infrastructure.Services.TradeSettlement;
 
 namespace TradeEngine.Infrastructure.BackgroundServices.OrderMatching;
@@ -16,9 +17,9 @@ public class OrderMatchingWorker(
     SettlementQueue settlementQueue,
     IOrderIngressQueue ingressQueue,
     IMarketEventBus marketEventBus,
+    DormantOrderTracker dormantOrderTracker,
     ILogger<OrderMatchingWorker> logger) : BackgroundService
 {
-    // Thesis Angle 14: Replaced nested standard Dictionary with ConcurrentDictionary to eradicate lock contention
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<Guid, Order>> _localOrderBook = new();
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -43,16 +44,17 @@ public class OrderMatchingWorker(
             .AsNoTracking()
             .ToListAsync(stoppingToken);
 
-        var grouped = pendingOrders
-            .GroupBy(o => o.Symbol)
-            .ToDictionary(
-                g => g.Key, 
-                g => new ConcurrentDictionary<Guid, Order>(g.ToDictionary(o => o.Id, o => o))
-            );
-        
-        foreach (var kvp in grouped)
+        foreach (var order in pendingOrders)
         {
-            _localOrderBook.TryAdd(kvp.Key, kvp.Value);
+            if (order.Type == OrderType.StopLoss || order.Type == OrderType.TakeProfit)
+            {
+                dormantOrderTracker.Register(order);
+            }
+            else
+            {
+                var symbolBook = _localOrderBook.GetOrAdd(order.Symbol, _ => new ConcurrentDictionary<Guid, Order>());
+                symbolBook.TryAdd(order.Id, order);
+            }
         }
         
         logger.LogInformation("📦 Loaded {Count} pending orders from database into Lock-Free RAM.", pendingOrders.Count);
@@ -62,11 +64,17 @@ public class OrderMatchingWorker(
     {
         await foreach (var newOrder in ingressQueue.Reader.ReadAllAsync(stoppingToken))
         {
-            var symbolBook = _localOrderBook.GetOrAdd(newOrder.Symbol, _ => new ConcurrentDictionary<Guid, Order>());
-            
-            symbolBook.TryAdd(newOrder.Id, newOrder);
-            
-            logger.LogDebug("📥 Ingressed new Order {Id} into memory instantly.", newOrder.Id);
+            if (newOrder.Type == OrderType.StopLoss || newOrder.Type == OrderType.TakeProfit)
+            {
+                dormantOrderTracker.Register(newOrder);
+                logger.LogDebug("📥 Ingressed Dormant Order {Id} ({Type}) into tracking engine.", newOrder.Id, newOrder.Type);
+            }
+            else
+            {
+                var symbolBook = _localOrderBook.GetOrAdd(newOrder.Symbol, _ => new ConcurrentDictionary<Guid, Order>());
+                symbolBook.TryAdd(newOrder.Id, newOrder);
+                logger.LogDebug("📥 Ingressed Active Order {Id} into memory instantly.", newOrder.Id);
+            }
         }
     }
 
@@ -79,6 +87,23 @@ public class OrderMatchingWorker(
             decimal currentPrice = tick.Price;
             string symbol = tick.Symbol;
 
+            var triggeredOrders = dormantOrderTracker.EvaluateTriggers(symbol, currentPrice);
+            
+            foreach (var triggered in triggeredOrders)
+            {
+                decimal volatilityFactor = Math.Max(tick.Volatility ?? decimal.Zero, decimal.One);
+                decimal slippageBps = (triggered.Quantity / 100m) * volatilityFactor * 0.0001m;
+                slippageBps = Math.Min(slippageBps, 0.05m);
+
+                decimal executionPrice = triggered.Side == OrderSide.Buy 
+                    ? currentPrice * (1 + slippageBps) 
+                    : currentPrice * (1 - slippageBps);
+
+                logger.LogInformation("🚨 CEP Triggered: {Type} {Id} converted to Market Order. Settled at ${Price}", triggered.Type, triggered.Id, executionPrice);
+                settlementQueue.Writer.TryWrite(new TradeSettlementCommand(triggered.Id, executionPrice));
+            }
+
+            // 2. Standard Limit Book Evaluation
             if (!_localOrderBook.TryGetValue(symbol, out var pendingOrders) || pendingOrders.IsEmpty)
             {
                 continue;
@@ -92,7 +117,6 @@ public class OrderMatchingWorker(
 
             foreach (var match in matches)
             {
-                // Lock-free atomic removal
                 pendingOrders.TryRemove(match.Id, out _); 
             }
 
@@ -112,10 +136,6 @@ public class OrderMatchingWorker(
 
                     logger.LogInformation("📉 VWAP Execution: Market {Side} of {Qty} {Symbol}. Top-of-book: ${Top}, VWAP Settled: ${Exec}", 
                         match.Side, match.Quantity, match.Symbol, currentPrice, executionPrice);
-                }
-                else 
-                {
-                    logger.LogInformation("🎯 Event-Driven Match! Queuing Limit Order {Id} for Settlement at ${Price}.", match.Id, currentPrice);
                 }
 
                 settlementQueue.Writer.TryWrite(new TradeSettlementCommand(match.Id, executionPrice));

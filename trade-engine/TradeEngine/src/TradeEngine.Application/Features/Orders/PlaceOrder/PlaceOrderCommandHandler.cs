@@ -46,7 +46,7 @@ public class PlaceOrderCommandHandler(
         if (walletResult.IsFailure)
             return Result.Failure<OrderResponse>(walletResult.Error);
 
-        var orderResult = Order.Create(request.UserId, symbol, request.Side, request.Type, request.Quantity, request.TargetPrice);
+        var orderResult = Order.Create(request.UserId, symbol, request.Side, request.Type, request.Quantity, request.TargetPrice, request.StopPrice);
         
         if (orderResult.IsFailure)
             return Result.Failure<OrderResponse>(orderResult.Error);

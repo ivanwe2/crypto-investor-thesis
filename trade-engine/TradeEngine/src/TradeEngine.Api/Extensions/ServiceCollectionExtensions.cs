@@ -61,6 +61,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IOrderIngressQueue, OrderIngressQueue>();
         services.AddSingleton<IMessagePublisher, RabbitMqPublisher>();
         services.AddSingleton<IMarketEventBus, MarketEventBus>();
+        services.AddSingleton<DormantOrderTracker>();
         services.AddHostedService<RabbitMqListener>();
         services.AddHostedService<AiSignalListener>();
         services.AddHostedService<OrderMatchingWorker>();

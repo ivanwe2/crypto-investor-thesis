@@ -51,6 +51,18 @@ namespace TradeEngine.Api.Endpoints
             .Produces<OrderBookResponse>()
             .WithName("GetOrderBookDepth")
             .WithSummary("Fetches L2 Order Book depth from the Go Market Gateway");
+
+            group.MapPost("/{symbol}/track", async (
+                string symbol,
+                MarketDataService.MarketDataServiceClient grpcClient) =>
+            {
+                var request = new SubscribeRequest { Symbol = symbol.ToUpper() };
+                var response = await grpcClient.SubscribeSymbolAsync(request);
+                
+                return Results.Ok(new { response.Success, response.Message });
+            })
+            .WithName("TrackMarket")
+            .WithSummary("Dynamically commands the Go Gateway to open a live Binance WebSocket stream for the symbol.");
         }
     }
 }

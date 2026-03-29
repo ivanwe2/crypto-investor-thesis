@@ -14,7 +14,6 @@ import (
 	"google.golang.org/grpc"
 )
 
-// MarketDataServer implements the generated protobuf interface
 type MarketDataServer struct {
 	pb.UnimplementedMarketDataServiceServer
 	cache *cache.MarketCache
@@ -24,7 +23,6 @@ func NewMarketDataServer(c *cache.MarketCache) *MarketDataServer {
 	return &MarketDataServer{cache: c}
 }
 
-// 1. Unary Request: Get a single snapshot instantly
 func (s *MarketDataServer) GetMarketSnapshot(ctx context.Context, req *pb.SnapshotRequest) (*pb.MarketSnapshot, error) {
 	snap, exists := s.cache.GetSnapshot(req.Symbol)
 	if !exists {
@@ -38,7 +36,6 @@ func (s *MarketDataServer) GetMarketSnapshot(ctx context.Context, req *pb.Snapsh
 	}, nil
 }
 
-// 2. Unary Request: Get volatility regime
 func (s *MarketDataServer) GetVolatilityScore(ctx context.Context, req *pb.VolatilityRequest) (*pb.VolatilityResponse, error) {
 	snap, exists := s.cache.GetSnapshot(req.Symbol)
 	if !exists {
@@ -59,7 +56,6 @@ func (s *MarketDataServer) GetVolatilityScore(ctx context.Context, req *pb.Volat
 	}, nil
 }
 
-// 3. Streaming Request: Push continuous updates to the client
 func (s *MarketDataServer) StreamMarketData(req *pb.StreamRequest, stream pb.MarketDataService_StreamMarketDataServer) error {
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
@@ -87,7 +83,6 @@ func (s *MarketDataServer) StreamMarketData(req *pb.StreamRequest, stream pb.Mar
 	}
 }
 
-// 4. ✨ NEW: Fetch Historical Klines via REST fallback
 func (s *MarketDataServer) GetHistoricalKlines(ctx context.Context, req *pb.KlinesRequest) (*pb.KlinesResponse, error) {
 	klinesData, err := exchange.FetchHistoricalKlines(ctx, req.Symbol, req.Interval, req.Limit)
 	if err != nil {
@@ -114,7 +109,6 @@ func (s *MarketDataServer) GetHistoricalKlines(ctx context.Context, req *pb.Klin
 	return response, nil
 }
 
-// 5. ✨ NEW: Fetch Order Book Depth via REST fallback
 func (s *MarketDataServer) GetOrderBookDepth(ctx context.Context, req *pb.OrderBookRequest) (*pb.OrderBookResponse, error) {
 	depthData, err := exchange.FetchOrderBookDepth(ctx, req.Symbol, req.Limit)
 	if err != nil {
@@ -139,7 +133,18 @@ func (s *MarketDataServer) GetOrderBookDepth(ctx context.Context, req *pb.OrderB
 	return response, nil
 }
 
-// StartServer spins up the gRPC listener on a background thread
+// ✨ NEW: Handles the new /track API call from the React frontend
+func (s *MarketDataServer) SubscribeSymbol(ctx context.Context, req *pb.SubscribeRequest) (*pb.SubscribeResponse, error) {
+	isNew := exchange.SubManager.Subscribe(req.Symbol)
+
+	if isNew {
+		log.Printf("[INFO] gRPC Request triggered NEW dynamic subscription for %s", req.Symbol)
+		return &pb.SubscribeResponse{Success: true, Message: "Successfully opened live stream for " + req.Symbol}, nil
+	}
+
+	return &pb.SubscribeResponse{Success: true, Message: "Stream already active"}, nil
+}
+
 func StartServer(port string, c *cache.MarketCache) *grpc.Server {
 	lis, err := net.Listen("tcp", port)
 	if err != nil {
@@ -149,15 +154,12 @@ func StartServer(port string, c *cache.MarketCache) *grpc.Server {
 	grpcServer := grpc.NewServer()
 	pb.RegisterMarketDataServiceServer(grpcServer, NewMarketDataServer(c))
 
-	// Run in a goroutine so it doesn't block the caller (main.go)
 	go func() {
 		log.Printf("[INFO] gRPC MarketGateway listening on %s", port)
 		if err := grpcServer.Serve(lis); err != nil {
-			// Serve() returns an error if stopped, ignore if it's the expected shutdown
 			log.Printf("[WARN] gRPC Server stopped: %v", err)
 		}
 	}()
 
-	// Return the instance so main.go can call GracefulStop() later
 	return grpcServer
 }
