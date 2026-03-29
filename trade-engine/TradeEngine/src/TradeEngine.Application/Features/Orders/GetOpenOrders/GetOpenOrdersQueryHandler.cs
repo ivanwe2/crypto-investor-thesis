@@ -21,7 +21,7 @@ public class GetOpenOrdersQueryHandler(
             .AsNoTracking()
             .Where(o => o.UserId == request.UserId && o.Status == OrderStatus.Pending)
             .OrderByDescending(o => o.CreatedAt)
-            .Select(o => new OpenOrderDto(o.Id, o.Symbol, o.Side.ToString(), o.Type.ToString(), o.Quantity, o.TargetPrice, o.Status.ToString(), o.CreatedAt))
+            .Select(o => new OpenOrderDto(o.Id, o.Symbol, o.Side.ToString(), o.Type.ToString(), o.Quantity, o.TargetPrice, o.Status.ToString(), o.CreatedAt, o.StopPrice))
             .ToListAsync(cancellationToken);
 
         // 3. Hydrate Cache

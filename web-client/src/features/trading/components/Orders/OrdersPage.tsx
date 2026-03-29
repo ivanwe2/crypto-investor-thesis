@@ -24,7 +24,11 @@ import {
   Clock16Regular,
 } from "@fluentui/react-icons";
 import { orderService } from "../../services/orderService";
-import type { OpenOrderDto } from "../../dtos/OrderDtos";
+import {
+  OrderSide,
+  OrderType,
+  type OpenOrderDto,
+} from "../../dtos/OrderDtos";
 import type { TradeHistoryDto } from "../../dtos/TradeHistoryDto";
 
 export const OrdersPage = () => {
@@ -33,15 +37,17 @@ export const OrdersPage = () => {
   const [cancellingId, setCancellingId] = useState<string | null>(null);
 
   const {
-    data: openOrders = [],
+    data: openOrdersData,
     isLoading: isLoadingOpen,
     isFetching: isFetchingOpen,
     refetch: refetchOpen,
-  } = useQuery<OpenOrderDto[]>({
+  } = useQuery({
     queryKey: ["orders", "open"],
     queryFn: orderService.getOpenOrders,
     staleTime: 5000,
   });
+  
+  const openOrders = openOrdersData ?? [];
 
   const {
     data: tradeHistory = [],
@@ -95,6 +101,37 @@ export const OrdersPage = () => {
       <Badge color="warning" icon={<Clock16Regular />} appearance="tint">
         {status}
       </Badge>
+    );
+  };
+
+  // ✨ Strict typing + Restored your original styling logic
+  const renderPriceCell = (order: OpenOrderDto) => {
+    if (order.type === OrderType.Market) {
+      return <Text>Market</Text>;
+    }
+
+    if (
+      order.type === OrderType.StopLoss ||
+      order.type === OrderType.TakeProfit
+    ) {
+      return (
+        <Badge appearance="tint" color="warning" shape="rounded">
+          Trigger: $
+          {order.stopPrice?.toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 4,
+          })}
+        </Badge>
+      );
+    }
+
+    return (
+      <Text>
+        $
+        {order.targetPrice?.toLocaleString(undefined, {
+          minimumFractionDigits: 2,
+        })}
+      </Text>
     );
   };
 
@@ -187,6 +224,7 @@ export const OrdersPage = () => {
                     <TableHeaderCell>Date</TableHeaderCell>
                     <TableHeaderCell>Symbol</TableHeaderCell>
                     <TableHeaderCell>Side</TableHeaderCell>
+                    <TableHeaderCell>Type</TableHeaderCell>
                     <TableHeaderCell>Price</TableHeaderCell>
                     <TableHeaderCell>Amount</TableHeaderCell>
                     <TableHeaderCell>Status</TableHeaderCell>
@@ -208,7 +246,7 @@ export const OrdersPage = () => {
                           size={200}
                           style={{ color: tokens.colorNeutralForeground3 }}
                         >
-                          {new Date(order.createdAt).toLocaleString(
+                          {new Date(order.createdAtUtc).toLocaleString(
                             undefined,
                             {
                               month: "short",
@@ -225,19 +263,18 @@ export const OrdersPage = () => {
                       <TableCell>
                         <Badge
                           appearance="tint"
-                          color={order.side === "Buy" ? "success" : "danger"}
+                          color={
+                            order.side === OrderSide.Buy ? "success" : "danger"
+                          }
                           shape="rounded"
                         >
                           {order.side}
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <Text>
-                          {order.type === "Market"
-                            ? "Market"
-                            : `$${order.targetPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
-                        </Text>
+                        <Text>{order.type}</Text>
                       </TableCell>
+                      <TableCell>{renderPriceCell(order)}</TableCell>
                       <TableCell>
                         <Text>{order.quantity}</Text>
                       </TableCell>
@@ -252,7 +289,6 @@ export const OrdersPage = () => {
                       </TableCell>
                       <TableCell style={{ textAlign: "right" }}>
                         <Button
-                          appearance="transparent"
                           icon={
                             cancellingId === order.id ? (
                               <Spinner size="tiny" />
@@ -260,6 +296,7 @@ export const OrdersPage = () => {
                               <DismissCircle16Regular />
                             )
                           }
+                          appearance="transparent"
                           style={{ color: tokens.colorPaletteRedForeground1 }}
                           onClick={() => cancelMutation.mutate(order.id)}
                           disabled={cancellingId === order.id}
@@ -327,13 +364,16 @@ export const OrdersPage = () => {
                           size={200}
                           style={{ color: tokens.colorNeutralForeground3 }}
                         >
-                          {new Date(trade.timestamp).toLocaleString(undefined, {
-                            month: "short",
-                            day: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                            second: "2-digit",
-                          })}
+                          {new Date(trade.timestamp).toLocaleString(
+                            undefined,
+                            {
+                              month: "short",
+                              day: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                              second: "2-digit",
+                            },
+                          )}
                         </Text>
                       </TableCell>
                       <TableCell>
@@ -356,7 +396,7 @@ export const OrdersPage = () => {
                         <Text>{trade.type}</Text>
                       </TableCell>
                       <TableCell>
-                        {/* ✨ FIX: Hide collateral lock price for Market Orders */}
+                        {/* ✨ Restored: Hide collateral lock price for Market Orders */}
                         <Text
                           style={
                             trade.executionPrice
@@ -367,9 +407,9 @@ export const OrdersPage = () => {
                               : {}
                           }
                         >
-                          {trade.type === "Market"
+                          {trade.type === OrderType.Market
                             ? "Market"
-                            : `$${trade.targetPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+                            : `$${trade.targetPrice?.toLocaleString(undefined, { minimumFractionDigits: 2 }) || "0.00"}`}
                         </Text>
                       </TableCell>
                       <TableCell>

@@ -8,5 +8,6 @@ public record OpenOrderDto(
     decimal Quantity,
     decimal TargetPrice,
     string Status,
-    DateTime CreatedAtUtc
+    DateTime CreatedAtUtc,
+    decimal? StopPrice = null
 );

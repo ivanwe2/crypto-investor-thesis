@@ -66,7 +66,8 @@ public class PlaceOrderCommandHandler(
                 order.Quantity,
                 order.TargetPrice,
                 order.Status.ToString(), 
-                order.CreatedAt);
+                order.CreatedAt,
+                order.StopPrice);
                 
             await redisService.AddOpenOrderAsync(request.UserId, orderDto, cancellationToken);
 

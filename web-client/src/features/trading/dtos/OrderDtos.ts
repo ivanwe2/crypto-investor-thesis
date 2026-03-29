@@ -37,25 +37,6 @@ export interface OpenOrderDto {
   quantity: number;
   targetPrice: number;
   status: string;
-  createdAt: string;
-}
-
-export interface TradeData {
-  tradeId: string;
-  symbol: string;
-  price: number;
-  quantity: number;
-  timestamp: number;
-  isBuyerMaker: boolean;
-}
-
-export interface TradeHistoryDto {
-  id: string;
-  symbol: string;
-  side: string;
-  type: string;
-  quantity: number;
-  executionPrice: number;
-  status: string;
-  executedAt: string;
+  createdAtUtc: string;
+  stopPrice?: number;
 }
