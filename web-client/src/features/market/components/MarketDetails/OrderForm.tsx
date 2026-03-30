@@ -12,8 +12,6 @@ import {
   Spinner,
   tokens,
   Text,
-  TabList,
-  Tab,
   makeStyles,
   shorthands,
   Field,
@@ -22,7 +20,6 @@ import { orderService } from "../../../trading/services/orderService";
 import { useNotificationStore } from "../../../../shared/store/notificationStore";
 import { OrderSide, OrderType } from "../../../trading/dtos/OrderDtos";
 
-// ✨ Strict Object Validation: nativeEnum works perfectly with 'as const' objects
 const orderSchema = z.object({
   orderType: z.nativeEnum(OrderType),
   side: z.nativeEnum(OrderSide),
@@ -51,9 +48,29 @@ const orderSchema = z.object({
 
 type OrderFormValues = z.infer<typeof orderSchema>;
 
+const ORDER_TYPE_OPTIONS = [
+  { value: OrderType.Limit,       label: "Limit"       },
+  { value: OrderType.Market,      label: "Market"      },
+  { value: OrderType.StopLoss,    label: "Stop Loss"   },
+  { value: OrderType.TakeProfit,  label: "Take Profit" },
+] as const;
+
 const useStyles = makeStyles({
   card: { backgroundColor: tokens.colorNeutralBackground1Hover },
   formBody: { display: "flex", flexDirection: "column", ...shorthands.gap("16px") },
+  // 2x2 grid so all four order types always fit without overflow
+  orderTypeGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    ...shorthands.gap("6px"),
+  },
+  orderTypeBtn: {
+    width: "100%",
+    justifyContent: "center",
+    fontSize: "13px",
+    ...shorthands.padding("6px", "4px"),
+    minWidth: "0",
+  },
   infoBox: {
     ...shorthands.padding("12px"),
     backgroundColor: tokens.colorNeutralBackground2,
@@ -96,22 +113,20 @@ export const OrderForm = ({ symbol, currentPrice }: { symbol: string; currentPri
   }, [currentPrice, watchTargetPrice, watchOrderType, setValue]);
 
   const onSubmit = async (data: OrderFormValues) => {
-    // Safely map the string objects to the C# integer domain
     const sideEnum = data.side === OrderSide.Buy ? 1 : 2;
-    
-    let typeEnum = 2; // Limit
-    if (data.orderType === OrderType.Market) typeEnum = 1;
-    if (data.orderType === OrderType.StopLoss) typeEnum = 3;
+    let typeEnum = 2;
+    if (data.orderType === OrderType.Market)     typeEnum = 1;
+    if (data.orderType === OrderType.StopLoss)   typeEnum = 3;
     if (data.orderType === OrderType.TakeProfit) typeEnum = 4;
 
     const parsedQty = Number(data.quantity);
     let finalTargetPrice = data.targetPrice ? Number(data.targetPrice) : undefined;
-    let finalStopPrice = data.stopPrice ? Number(data.stopPrice) : undefined;
+    let finalStopPrice   = data.stopPrice   ? Number(data.stopPrice)   : undefined;
 
-    if (typeEnum === 1) { // Market Order VWAP preview adjustment
-        finalTargetPrice = sideEnum === 1 
-            ? currentPrice * 1.05 
-            : currentPrice * 0.95; 
+    if (typeEnum === 1) {
+      finalTargetPrice = sideEnum === 1
+        ? currentPrice * 1.05
+        : currentPrice * 0.95;
     }
 
     try {
@@ -121,7 +136,7 @@ export const OrderForm = ({ symbol, currentPrice }: { symbol: string; currentPri
         type: typeEnum,
         quantity: parsedQty,
         targetPrice: finalTargetPrice || 0,
-        stopPrice: [OrderType.StopLoss, OrderType.TakeProfit].includes(data.orderType as any) ? finalStopPrice : undefined, 
+        stopPrice: [OrderType.StopLoss, OrderType.TakeProfit].includes(data.orderType as any) ? finalStopPrice : undefined,
       });
 
       const priceText = typeEnum === 1 ? "Market Price" : `@ $${finalTargetPrice}`;
@@ -140,20 +155,27 @@ export const OrderForm = ({ symbol, currentPrice }: { symbol: string; currentPri
     <Card className={styles.card}>
       <CardHeader header={<Text weight="semibold" size={500}>Place Order</Text>} />
 
+      {/* 2x2 order type selector — all four types always visible, no overflow */}
       <Controller
         name="orderType"
         control={control}
         render={({ field }) => (
-          <TabList
-            selectedValue={field.value}
-            onTabSelect={(_, data) => field.onChange(data.value as OrderType)}
-            style={{ marginBottom: "8px" }}
-          >
-            <Tab value={OrderType.Limit}>Limit</Tab>
-            <Tab value={OrderType.Market}>Market</Tab>
-            <Tab value={OrderType.StopLoss}>Stop Loss</Tab>
-            <Tab value={OrderType.TakeProfit}>Take Profit</Tab>
-          </TabList>
+          <div className={styles.orderTypeGrid}>
+            {ORDER_TYPE_OPTIONS.map(({ value, label }) => {
+              const isActive = field.value === value;
+              return (
+                <Button
+                  key={value}
+                  className={styles.orderTypeBtn}
+                  appearance={isActive ? "primary" : "secondary"}
+                  size="small"
+                  onClick={() => field.onChange(value)}
+                >
+                  {label}
+                </Button>
+              );
+            })}
+          </div>
         )}
       />
 
@@ -162,9 +184,33 @@ export const OrderForm = ({ symbol, currentPrice }: { symbol: string; currentPri
           name="side"
           control={control}
           render={({ field }) => (
-            <RadioGroup value={field.value} onChange={(_, d) => field.onChange(d.value as OrderSide)} layout="horizontal">
-              <Radio value={OrderSide.Buy} label={<Text style={{ color: tokens.colorPaletteGreenForeground1, fontWeight: field.value === OrderSide.Buy ? "bold" : "normal" }}>Buy</Text>} />
-              <Radio value={OrderSide.Sell} label={<Text style={{ color: tokens.colorPaletteRedForeground1, fontWeight: field.value === OrderSide.Sell ? "bold" : "normal" }}>Sell</Text>} />
+            <RadioGroup
+              value={field.value}
+              onChange={(_, d) => field.onChange(d.value as OrderSide)}
+              layout="horizontal"
+            >
+              <Radio
+                value={OrderSide.Buy}
+                label={
+                  <Text style={{
+                    color: tokens.colorPaletteGreenForeground1,
+                    fontWeight: field.value === OrderSide.Buy ? "bold" : "normal",
+                  }}>
+                    Buy
+                  </Text>
+                }
+              />
+              <Radio
+                value={OrderSide.Sell}
+                label={
+                  <Text style={{
+                    color: tokens.colorPaletteRedForeground1,
+                    fontWeight: field.value === OrderSide.Sell ? "bold" : "normal",
+                  }}>
+                    Sell
+                  </Text>
+                }
+              />
             </RadioGroup>
           )}
         />
@@ -174,48 +220,63 @@ export const OrderForm = ({ symbol, currentPrice }: { symbol: string; currentPri
             name="targetPrice"
             control={control}
             render={({ field }) => (
-              <Field validationMessage={errors.targetPrice?.message} validationState={errors.targetPrice ? "error" : "none"}>
+              <Field
+                validationMessage={errors.targetPrice?.message}
+                validationState={errors.targetPrice ? "error" : "none"}
+              >
                 <div className={styles.priceRow}>
                   <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>Limit Price (USD)</Text>
-                  <Text size={200} className={styles.clickableText} onClick={() => setValue("targetPrice", currentPrice.toString(), { shouldValidate: true })} title="Click to copy current price">
+                  <Text
+                    size={200}
+                    className={styles.clickableText}
+                    onClick={() => setValue("targetPrice", currentPrice.toString(), { shouldValidate: true })}
+                    title="Click to copy current price"
+                  >
                     Use Last: ${currentPrice?.toLocaleString() || "0.00"}
                   </Text>
                 </div>
-                <Input 
-                  value={field.value} 
-                  onChange={(_, data) => field.onChange(data.value)} 
+                <Input
+                  value={field.value}
+                  onChange={(_, data) => field.onChange(data.value)}
                   onBlur={field.onBlur}
                   name={field.name}
-                  type="number" 
-                  step="0.01" 
-                  style={{ width: "100%" }} 
+                  type="number"
+                  step="0.01"
+                  style={{ width: "100%" }}
                 />
               </Field>
             )}
           />
         )}
 
-        {/* ✨ CEP Stop Price Input */}
         {[OrderType.StopLoss, OrderType.TakeProfit].includes(watchOrderType as any) && (
           <Controller
             name="stopPrice"
             control={control}
             render={({ field }) => (
-              <Field validationMessage={errors.stopPrice?.message} validationState={errors.stopPrice ? "error" : "none"}>
+              <Field
+                validationMessage={errors.stopPrice?.message}
+                validationState={errors.stopPrice ? "error" : "none"}
+              >
                 <div className={styles.priceRow}>
                   <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>Trigger Stop Price (USD)</Text>
-                  <Text size={200} className={styles.clickableText} onClick={() => setValue("stopPrice", currentPrice.toString(), { shouldValidate: true })} title="Click to copy current price">
+                  <Text
+                    size={200}
+                    className={styles.clickableText}
+                    onClick={() => setValue("stopPrice", currentPrice.toString(), { shouldValidate: true })}
+                    title="Click to copy current price"
+                  >
                     Use Last: ${currentPrice?.toLocaleString() || "0.00"}
                   </Text>
                 </div>
-                <Input 
-                  value={field.value} 
-                  onChange={(_, data) => field.onChange(data.value)} 
+                <Input
+                  value={field.value}
+                  onChange={(_, data) => field.onChange(data.value)}
                   onBlur={field.onBlur}
                   name={field.name}
-                  type="number" 
-                  step="0.01" 
-                  style={{ width: "100%" }} 
+                  type="number"
+                  step="0.01"
+                  style={{ width: "100%" }}
                 />
               </Field>
             )}
@@ -224,7 +285,9 @@ export const OrderForm = ({ symbol, currentPrice }: { symbol: string; currentPri
 
         {watchOrderType === OrderType.Market && (
           <div className={styles.infoBox}>
-            <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>Executes immediately at the best available market price.</Text>
+            <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+              Executes immediately at the best available market price.
+            </Text>
             <br />
             <Text size={100} style={{ color: tokens.colorPaletteYellowBackground1 }}>
               Note: Market Buys temporarily lock +5% collateral to account for potential slippage. Excess funds are instantly refunded upon settlement.
@@ -236,18 +299,23 @@ export const OrderForm = ({ symbol, currentPrice }: { symbol: string; currentPri
           name="quantity"
           control={control}
           render={({ field }) => (
-            <Field validationMessage={errors.quantity?.message} validationState={errors.quantity ? "error" : "none"}>
+            <Field
+              validationMessage={errors.quantity?.message}
+              validationState={errors.quantity ? "error" : "none"}
+            >
               <div className={styles.priceRow}>
-                <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>Quantity ({symbol.replace("USDT", "").replace("USD", "")})</Text>
+                <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+                  Quantity ({symbol.replace("USDT", "").replace("USD", "")})
+                </Text>
               </div>
-              <Input 
-                value={field.value} 
-                onChange={(_, data) => field.onChange(data.value)} 
+              <Input
+                value={field.value}
+                onChange={(_, data) => field.onChange(data.value)}
                 onBlur={field.onBlur}
                 name={field.name}
-                type="number" 
-                step="0.0001" 
-                style={{ width: "100%" }} 
+                type="number"
+                step="0.0001"
+                style={{ width: "100%" }}
               />
             </Field>
           )}
@@ -268,7 +336,11 @@ export const OrderForm = ({ symbol, currentPrice }: { symbol: string; currentPri
           disabled={isSubmitting}
           style={{
             backgroundColor: isBuy ? tokens.colorPaletteGreenBackground3 : tokens.colorPaletteRedBackground3,
-            color: "white", height: "44px", fontSize: "16px", fontWeight: "bold", transition: "all 0.2s ease"
+            color: "white",
+            height: "44px",
+            fontSize: "16px",
+            fontWeight: "bold",
+            transition: "all 0.2s ease",
           }}
         >
           {isSubmitting ? <Spinner size="tiny" /> : `${watchSide} ${symbol}`}

@@ -122,6 +122,16 @@ class SignalRService {
             }
         }
     }
+
+    public async leaveGroup(symbol: string): Promise<void> {
+    if (this.connection?.state === signalR.HubConnectionState.Connected) {
+      try {
+        await this.connection.invoke('LeaveMarketGroup', symbol);
+      } catch (err) {
+        console.error(`Failed to leave group ${symbol}:`, err);
+      }
+    }
+  }
 }
 
 export const signalRService = new SignalRService();

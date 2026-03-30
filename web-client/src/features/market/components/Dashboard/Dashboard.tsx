@@ -24,6 +24,7 @@ import { useWatchlistStore } from "../../store/watchlistStore";
 import { marketService } from "../../services/marketService";
 import { SentimentWidget } from "../../../ai/components/SentimentWidget";
 import { PopularMarkets } from "./PopularMarkets";
+import { formatPrice } from "../../../../shared/utils/formatPrice";
 
 const useStyles = makeStyles({
   dashboardContainer: {
@@ -147,6 +148,16 @@ export const Dashboard = () => {
     addSymbol(symbolToTrack);
   };
 
+  // Leave the SignalR group when a coin is removed from the watchlist.
+  // NOTE: this does NOT yet close the Binance WebSocket on the Go side —
+  // see the architecture notes in the README for the ref-counting approach
+  // needed to do that safely when multiple users are connected.
+  const handleRemoveSymbol = async (symbol: string) => {
+    removeSymbol(symbol);
+    joinedSymbols.current.delete(symbol);
+    await signalRService.leaveGroup(symbol);
+  };
+
   return (
     <div className={styles.dashboardContainer}>
       <header className={styles.header}>
@@ -157,7 +168,6 @@ export const Dashboard = () => {
 
       <div className={styles.grid}>
         <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-          {/* Search + quick-add panel */}
           <Card
             style={{ backgroundColor: tokens.colorNeutralBackground1Hover }}
           >
@@ -177,12 +187,9 @@ export const Dashboard = () => {
                 Add Coin
               </Button>
             </div>
-
-            {/* Popular markets quick-pick */}
             <PopularMarkets />
           </Card>
 
-          {/* Live ticker grid */}
           <div className={styles.tickerGrid}>
             {watchList.map((symbol) => {
               const ticker = tickers[symbol];
@@ -195,7 +202,7 @@ export const Dashboard = () => {
                         <Button
                           icon={<Dismiss16Regular />}
                           appearance="transparent"
-                          onClick={() => removeSymbol(symbol)}
+                          onClick={() => handleRemoveSymbol(symbol)}
                         />
                       }
                     />
@@ -256,7 +263,7 @@ export const Dashboard = () => {
                         <Button
                           icon={<Dismiss16Regular />}
                           appearance="transparent"
-                          onClick={() => removeSymbol(symbol)}
+                          onClick={() => handleRemoveSymbol(symbol)}
                         />
                       </div>
                     }
@@ -270,8 +277,9 @@ export const Dashboard = () => {
                       alignItems: "flex-end",
                     }}
                   >
+                    {/* formatPrice handles everything from BTC ($60k) to PEPE ($0.0000x) */}
                     <Text
-                      size={800}
+                      size={ticker.price < 0.01 ? 500 : 800}
                       weight="bold"
                       style={{
                         color: isUp
@@ -279,13 +287,12 @@ export const Dashboard = () => {
                           : isDown
                             ? tokens.colorPaletteRedForeground1
                             : tokens.colorNeutralForeground1,
+                        fontFamily: "monospace",
+                        letterSpacing:
+                          ticker.price < 0.01 ? "-0.02em" : undefined,
                       }}
                     >
-                      $
-                      {ticker.price.toLocaleString(undefined, {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 4,
-                      })}
+                      ${formatPrice(ticker.price)}
                     </Text>
 
                     <Button
