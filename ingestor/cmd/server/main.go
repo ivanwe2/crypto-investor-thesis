@@ -24,11 +24,48 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 )
 
-// ✨ NEW: Debouncer state to prevent log spam
-var (
-	lastAlertTime = make(map[string]time.Time)
-	alertMutex    sync.Mutex
-)
+type AlertDebouncer struct {
+	mu       sync.Mutex
+	lastSent map[string]time.Time
+	ttl      time.Duration
+}
+
+func NewAlertDebouncer(ttl time.Duration, cleanupInterval time.Duration) *AlertDebouncer {
+	ad := &AlertDebouncer{
+		lastSent: make(map[string]time.Time),
+		ttl:      ttl,
+	}
+	go ad.cleanupLoop(cleanupInterval)
+	return ad
+}
+
+func (ad *AlertDebouncer) cleanupLoop(interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for range ticker.C {
+		ad.mu.Lock()
+		now := time.Now()
+		for symbol, timestamp := range ad.lastSent {
+			if now.Sub(timestamp) > ad.ttl {
+				delete(ad.lastSent, symbol) // Free up memory
+			}
+		}
+		ad.mu.Unlock()
+	}
+}
+
+func (ad *AlertDebouncer) ShouldAlert(symbol string) bool {
+	ad.mu.Lock()
+	defer ad.mu.Unlock()
+	now := time.Now()
+	if last, exists := ad.lastSent[symbol]; exists {
+		if now.Sub(last) < ad.ttl {
+			return false // Too soon to alert again
+		}
+	}
+	ad.lastSent[symbol] = now
+	return true
+}
 
 func main() {
 	log.Println("[INFO] Crypto Ingestor Starting...")
@@ -53,6 +90,9 @@ func main() {
 	// ✨ Initialize our new high-performance memory structures
 	marketCache := cache.NewMarketCache()
 	volTracker := analytics.NewVolatilityTracker()
+
+	// Initialize debouncer: 5 seconds cooldown per alert, 10 min memory cleanup sweep
+	debouncer := NewAlertDebouncer(5*time.Second, 10*time.Minute)
 
 	grpcServer := grpc.StartServer(":50051", marketCache)
 
@@ -89,17 +129,11 @@ func main() {
 				volatility := volTracker.ProcessTick(trade.Data.Symbol, priceFloat)
 				marketCache.UpdatePrice(trade.Data.Symbol, priceFloat, volatility)
 
-				// ✨ FIX 2: The Debouncer
+				// ✨ FIX 1.4: Using the memory-safe debouncer
 				if volatility > 5.0 {
-					alertMutex.Lock()
-					lastTime, exists := lastAlertTime[trade.Data.Symbol]
-
-					// Only alert if we haven't alerted for this coin in the last 5 seconds
-					if !exists || time.Since(lastTime) > 5*time.Second {
+					if debouncer.ShouldAlert(trade.Data.Symbol) {
 						log.Printf("🚨 [ALERT] High volatility detected on %s: %.2f", trade.Data.Symbol, volatility)
-						lastAlertTime[trade.Data.Symbol] = time.Now()
 					}
-					alertMutex.Unlock()
 				}
 			} else {
 				log.Printf("[WARN] Failed to parse price for %s: %v", trade.Data.Symbol, parseErr)

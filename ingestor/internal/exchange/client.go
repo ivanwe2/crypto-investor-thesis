@@ -42,6 +42,16 @@ func (sm *SubscriptionManager) Subscribe(symbol string) bool {
 	return true
 }
 
+// ✨ FIX 1.3: Thread-safe pre-warming
+// PreWarm safely adds initial symbols without triggering the dynamic subChan
+func (sm *SubscriptionManager) PreWarm(symbols []string) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	for _, s := range symbols {
+		sm.active[strings.ToLower(s)] = true
+	}
+}
+
 func Connect(ctx context.Context, symbols []string, dataChan chan<- CombinedStreamEvent) {
 	streamParams := make([]string, len(symbols))
 	for i, s := range symbols {
@@ -49,6 +59,9 @@ func Connect(ctx context.Context, symbols []string, dataChan chan<- CombinedStre
 		// Pre-warm the idempotency map with our initial symbols
 		SubManager.active[strings.ToLower(s)] = true
 	}
+
+	SubManager.PreWarm(symbols)
+
 	url := baseURL + strings.Join(streamParams, "/")
 
 	log.Printf("Connecting to Binance: %s", url)
