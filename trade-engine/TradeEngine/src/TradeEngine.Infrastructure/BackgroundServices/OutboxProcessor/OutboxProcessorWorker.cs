@@ -4,60 +4,72 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using TradeEngine.Application.Interfaces;
 using TradeEngine.Infrastructure.Persistence;
+using TradeEngine.Infrastructure.Services.Outbox;
 
 namespace TradeEngine.Infrastructure.BackgroundServices.OutboxProcessor;
 
 public class OutboxProcessorWorker(
     IServiceProvider serviceProvider,
+    IMessagePublisher messagePublisher,
+    OutboxTrigger outboxTrigger,
     ILogger<OutboxProcessorWorker> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        logger.LogInformation("🚀 Outbox Processor Worker starting...");
+        logger.LogInformation("Event-Driven Outbox Processor started.");
 
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
-                using var scope = serviceProvider.CreateScope();
-                
-                var dbContext = scope.ServiceProvider.GetRequiredService<TradeEngineDbContext>();
-                var publisher = scope.ServiceProvider.GetRequiredService<IMessagePublisher>();
-                
-                var messages = await dbContext.TradeOutboxMessages
-                    .Where(m => m.ProcessedOnUtc == null)
-                    .OrderBy(m => m.OccurredOnUtc)
-                    .Take(20)
-                    .ToListAsync(stoppingToken);
-
-                if (messages.Count > 0)
-                {
-                    logger.LogInformation("📦 Found {Count} outbox messages to push to RabbitMQ", messages.Count);
-
-                    foreach (var message in messages)
-                    {
-                        try
-                        {
-                            await publisher.PublishAsync(message.Type, message.Content, stoppingToken);
-                            
-                            message.ProcessedOnUtc = DateTime.UtcNow;
-                        }
-                        catch (Exception ex)
-                        {
-                            logger.LogError(ex, "❌ Failed to publish message {Id} to RabbitMQ", message.Id);
-                            message.Error = ex.Message;
-                        }
-                    }
-
-                    await dbContext.SaveChangesAsync(stoppingToken);
-                }
+                await ProcessOutboxMessagesAsync(stoppingToken);
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "❌ An error occurred while processing outbox messages.");
+                logger.LogError(ex, "Error processing outbox messages.");
             }
 
-            await Task.Delay(3000, stoppingToken);
+            try
+            {
+                using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+                var triggerTask = outboxTrigger.WaitForTriggerAsync(timeoutCts.Token);
+                var timeoutTask = Task.Delay(TimeSpan.FromSeconds(30), timeoutCts.Token);
+
+                await Task.WhenAny(triggerTask, timeoutTask);
+                
+                // Cancel whichever task didn't finish to free up resources
+                timeoutCts.Cancel(); 
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected during shutdown
+            }
         }
+    }
+
+    private async Task ProcessOutboxMessagesAsync(CancellationToken stoppingToken)
+    {
+        using var scope = serviceProvider.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<ITradeEngineDbContext>();
+
+        // Fetch up to 50 pending messages at a time
+        var messages = await dbContext.TradeOutboxMessages
+            .Where(m => !m.ProcessedOnUtc.HasValue)
+            .OrderBy(m => m.OccurredOnUtc)
+            .Take(50)
+            .ToListAsync(stoppingToken);
+
+        if (messages.Count == 0) return;
+
+        foreach (var message in messages)
+        {
+            // Publish to RabbitMQ -> AI Analyst
+            await messagePublisher.PublishAsync(message.Type, message.Content, stoppingToken);
+
+            message.ProcessedOnUtc = DateTime.UtcNow;
+            logger.LogDebug("Processed outbox message {MessageId}", message.Id);
+        }
+
+        await dbContext.SaveChangesAsync(stoppingToken);
     }
 }

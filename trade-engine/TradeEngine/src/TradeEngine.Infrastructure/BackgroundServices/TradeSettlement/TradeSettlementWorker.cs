@@ -8,6 +8,7 @@ using TradeEngine.Application.Interfaces;
 using TradeEngine.Domain.Entities;
 using TradeEngine.Domain.Enums;
 using TradeEngine.Infrastructure.Persistence;
+using TradeEngine.Infrastructure.Services.Outbox;
 using TradeEngine.Infrastructure.Services.TradeSettlement;
 
 namespace TradeEngine.Infrastructure.BackgroundServices.TradeSettlement;
@@ -15,6 +16,7 @@ namespace TradeEngine.Infrastructure.BackgroundServices.TradeSettlement;
 public class TradeSettlementWorker(
     IServiceScopeFactory scopeFactory,
     SettlementQueue settlementQueue,
+    OutboxTrigger outboxTrigger,
     ILogger<TradeSettlementWorker> logger) : BackgroundService
 {
      protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -115,6 +117,8 @@ public class TradeSettlementWorker(
                     await transaction.CommitAsync(stoppingToken);
 
                     logger.LogInformation("✅ Settlement Complete: Order {Id} Filled at ${Price}", order.Id, command.ExecutionPrice);
+
+                    outboxTrigger.Trigger();
                     
                     try 
                     {

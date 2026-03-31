@@ -27,6 +27,7 @@ using TradeEngine.Infrastructure.Persistence;
 using TradeEngine.Infrastructure.Services;
 using TradeEngine.Infrastructure.Services.Messaging;
 using TradeEngine.Infrastructure.Services.Orders;
+using TradeEngine.Infrastructure.Services.Outbox;
 using TradeEngine.Infrastructure.Services.TradeSettlement;
 using TradeEngine.Infrastructure.SignalR.Providers;
 using TradeEngine.Infrastructure.SignalR.Services;
@@ -62,6 +63,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IMessagePublisher, RabbitMqPublisher>();
         services.AddSingleton<IMarketEventBus, MarketEventBus>();
         services.AddSingleton<DormantOrderTracker>();
+        services.AddSingleton<OutboxTrigger>();
         services.AddHostedService<RabbitMqListener>();
         services.AddHostedService<AiSignalListener>();
         services.AddHostedService<OrderMatchingWorker>();
