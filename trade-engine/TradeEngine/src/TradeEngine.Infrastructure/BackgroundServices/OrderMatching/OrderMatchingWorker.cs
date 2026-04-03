@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -9,6 +10,7 @@ using TradeEngine.Domain.Enums;
 using TradeEngine.Infrastructure.Persistence;
 using TradeEngine.Infrastructure.Services.Orders;
 using TradeEngine.Infrastructure.Services.TradeSettlement;
+using TradeEngine.Infrastructure.Telemetry;
 
 namespace TradeEngine.Infrastructure.BackgroundServices.OrderMatching;
 
@@ -18,6 +20,7 @@ public class OrderMatchingWorker(
     IOrderIngressQueue ingressQueue,
     IMarketEventBus marketEventBus,
     DormantOrderTracker dormantOrderTracker,
+    TradingMetrics tradingMetrics,
     ILogger<OrderMatchingWorker> logger) : BackgroundService
 {
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<Guid, Order>> _localOrderBook = new();
@@ -84,6 +87,7 @@ public class OrderMatchingWorker(
         
         await foreach (var tick in marketEventBus.Reader.ReadAllAsync(stoppingToken))
         {
+            var sw = Stopwatch.StartNew();
             decimal currentPrice = tick.Price;
             string symbol = tick.Symbol;
 
@@ -101,6 +105,7 @@ public class OrderMatchingWorker(
 
                 logger.LogInformation("🚨 CEP Triggered: {Type} {Id} converted to Market Order. Settled at ${Price}", triggered.Type, triggered.Id, executionPrice);
                 settlementQueue.Writer.TryWrite(new TradeSettlementCommand(triggered.Id, executionPrice));
+                tradingMetrics.RecordOrderMatched();
             }
 
             // 2. Standard Limit Book Evaluation
@@ -139,7 +144,11 @@ public class OrderMatchingWorker(
                 }
 
                 settlementQueue.Writer.TryWrite(new TradeSettlementCommand(match.Id, executionPrice));
+                tradingMetrics.RecordOrderMatched();
             }
+
+            sw.Stop();
+            tradingMetrics.RecordMatchingLoopDuration(sw.Elapsed.TotalMilliseconds);
         }
     }
 }

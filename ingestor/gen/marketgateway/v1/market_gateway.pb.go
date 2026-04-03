@@ -491,6 +491,102 @@ func (x *SubscribeResponse) GetMessage() string {
 	return ""
 }
 
+type UnsubscribeRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Symbol        string                 `protobuf:"bytes,1,opt,name=symbol,proto3" json:"symbol,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UnsubscribeRequest) Reset() {
+	*x = UnsubscribeRequest{}
+	mi := &file_proto_market_gateway_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UnsubscribeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UnsubscribeRequest) ProtoMessage() {}
+
+func (x *UnsubscribeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_market_gateway_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UnsubscribeRequest.ProtoReflect.Descriptor instead.
+func (*UnsubscribeRequest) Descriptor() ([]byte, []int) {
+	return file_proto_market_gateway_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *UnsubscribeRequest) GetSymbol() string {
+	if x != nil {
+		return x.Symbol
+	}
+	return ""
+}
+
+type UnsubscribeResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UnsubscribeResponse) Reset() {
+	*x = UnsubscribeResponse{}
+	mi := &file_proto_market_gateway_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UnsubscribeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UnsubscribeResponse) ProtoMessage() {}
+
+func (x *UnsubscribeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_market_gateway_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UnsubscribeResponse.ProtoReflect.Descriptor instead.
+func (*UnsubscribeResponse) Descriptor() ([]byte, []int) {
+	return file_proto_market_gateway_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *UnsubscribeResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *UnsubscribeResponse) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
 // --- Data Structures ---
 type Kline struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -506,7 +602,7 @@ type Kline struct {
 
 func (x *Kline) Reset() {
 	*x = Kline{}
-	mi := &file_proto_market_gateway_proto_msgTypes[9]
+	mi := &file_proto_market_gateway_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -518,7 +614,7 @@ func (x *Kline) String() string {
 func (*Kline) ProtoMessage() {}
 
 func (x *Kline) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_market_gateway_proto_msgTypes[9]
+	mi := &file_proto_market_gateway_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -531,7 +627,7 @@ func (x *Kline) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Kline.ProtoReflect.Descriptor instead.
 func (*Kline) Descriptor() ([]byte, []int) {
-	return file_proto_market_gateway_proto_rawDescGZIP(), []int{9}
+	return file_proto_market_gateway_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *Kline) GetStartTimeUtc() int64 {
@@ -586,7 +682,7 @@ type KlinesResponse struct {
 
 func (x *KlinesResponse) Reset() {
 	*x = KlinesResponse{}
-	mi := &file_proto_market_gateway_proto_msgTypes[10]
+	mi := &file_proto_market_gateway_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -598,7 +694,7 @@ func (x *KlinesResponse) String() string {
 func (*KlinesResponse) ProtoMessage() {}
 
 func (x *KlinesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_market_gateway_proto_msgTypes[10]
+	mi := &file_proto_market_gateway_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -611,7 +707,7 @@ func (x *KlinesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use KlinesResponse.ProtoReflect.Descriptor instead.
 func (*KlinesResponse) Descriptor() ([]byte, []int) {
-	return file_proto_market_gateway_proto_rawDescGZIP(), []int{10}
+	return file_proto_market_gateway_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *KlinesResponse) GetSymbol() string {
@@ -638,7 +734,7 @@ type OrderBookEntry struct {
 
 func (x *OrderBookEntry) Reset() {
 	*x = OrderBookEntry{}
-	mi := &file_proto_market_gateway_proto_msgTypes[11]
+	mi := &file_proto_market_gateway_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -650,7 +746,7 @@ func (x *OrderBookEntry) String() string {
 func (*OrderBookEntry) ProtoMessage() {}
 
 func (x *OrderBookEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_market_gateway_proto_msgTypes[11]
+	mi := &file_proto_market_gateway_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -663,7 +759,7 @@ func (x *OrderBookEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OrderBookEntry.ProtoReflect.Descriptor instead.
 func (*OrderBookEntry) Descriptor() ([]byte, []int) {
-	return file_proto_market_gateway_proto_rawDescGZIP(), []int{11}
+	return file_proto_market_gateway_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *OrderBookEntry) GetPrice() float64 {
@@ -692,7 +788,7 @@ type OrderBookResponse struct {
 
 func (x *OrderBookResponse) Reset() {
 	*x = OrderBookResponse{}
-	mi := &file_proto_market_gateway_proto_msgTypes[12]
+	mi := &file_proto_market_gateway_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -704,7 +800,7 @@ func (x *OrderBookResponse) String() string {
 func (*OrderBookResponse) ProtoMessage() {}
 
 func (x *OrderBookResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_market_gateway_proto_msgTypes[12]
+	mi := &file_proto_market_gateway_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -717,7 +813,7 @@ func (x *OrderBookResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OrderBookResponse.ProtoReflect.Descriptor instead.
 func (*OrderBookResponse) Descriptor() ([]byte, []int) {
-	return file_proto_market_gateway_proto_rawDescGZIP(), []int{12}
+	return file_proto_market_gateway_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *OrderBookResponse) GetSymbol() string {
@@ -783,6 +879,11 @@ const file_proto_market_gateway_proto_rawDesc = "" +
 	"\x06regime\x18\x03 \x01(\tR\x06regime\"G\n" +
 	"\x11SubscribeResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\",\n" +
+	"\x12UnsubscribeRequest\x12\x16\n" +
+	"\x06symbol\x18\x01 \x01(\tR\x06symbol\"I\n" +
+	"\x13UnsubscribeResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\"\x95\x01\n" +
 	"\x05Kline\x12$\n" +
 	"\x0estart_time_utc\x18\x01 \x01(\x03R\fstartTimeUtc\x12\x12\n" +
@@ -801,14 +902,15 @@ const file_proto_market_gateway_proto_rawDesc = "" +
 	"\x06symbol\x18\x01 \x01(\tR\x06symbol\x124\n" +
 	"\x04bids\x18\x02 \x03(\v2 .marketgateway.v1.OrderBookEntryR\x04bids\x124\n" +
 	"\x04asks\x18\x03 \x03(\v2 .marketgateway.v1.OrderBookEntryR\x04asks\x12$\n" +
-	"\x0elast_update_id\x18\x04 \x01(\x03R\flastUpdateId2\xbb\x04\n" +
+	"\x0elast_update_id\x18\x04 \x01(\x03R\flastUpdateId2\x9d\x05\n" +
 	"\x11MarketDataService\x12X\n" +
 	"\x11GetMarketSnapshot\x12!.marketgateway.v1.SnapshotRequest\x1a .marketgateway.v1.MarketSnapshot\x12W\n" +
 	"\x10StreamMarketData\x12\x1f.marketgateway.v1.StreamRequest\x1a .marketgateway.v1.MarketSnapshot0\x01\x12_\n" +
 	"\x12GetVolatilityScore\x12#.marketgateway.v1.VolatilityRequest\x1a$.marketgateway.v1.VolatilityResponse\x12X\n" +
 	"\x13GetHistoricalKlines\x12\x1f.marketgateway.v1.KlinesRequest\x1a .marketgateway.v1.KlinesResponse\x12\\\n" +
 	"\x11GetOrderBookDepth\x12\".marketgateway.v1.OrderBookRequest\x1a#.marketgateway.v1.OrderBookResponse\x12Z\n" +
-	"\x0fSubscribeSymbol\x12\".marketgateway.v1.SubscribeRequest\x1a#.marketgateway.v1.SubscribeResponseB\x1fZ\x1dingestor/gen/marketgateway/v1b\x06proto3"
+	"\x0fSubscribeSymbol\x12\".marketgateway.v1.SubscribeRequest\x1a#.marketgateway.v1.SubscribeResponse\x12`\n" +
+	"\x11UnsubscribeSymbol\x12$.marketgateway.v1.UnsubscribeRequest\x1a%.marketgateway.v1.UnsubscribeResponseB\x1fZ\x1dingestor/gen/marketgateway/v1b\x06proto3"
 
 var (
 	file_proto_market_gateway_proto_rawDescOnce sync.Once
@@ -822,40 +924,44 @@ func file_proto_market_gateway_proto_rawDescGZIP() []byte {
 	return file_proto_market_gateway_proto_rawDescData
 }
 
-var file_proto_market_gateway_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
+var file_proto_market_gateway_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_proto_market_gateway_proto_goTypes = []any{
-	(*SnapshotRequest)(nil),    // 0: marketgateway.v1.SnapshotRequest
-	(*StreamRequest)(nil),      // 1: marketgateway.v1.StreamRequest
-	(*VolatilityRequest)(nil),  // 2: marketgateway.v1.VolatilityRequest
-	(*KlinesRequest)(nil),      // 3: marketgateway.v1.KlinesRequest
-	(*OrderBookRequest)(nil),   // 4: marketgateway.v1.OrderBookRequest
-	(*SubscribeRequest)(nil),   // 5: marketgateway.v1.SubscribeRequest
-	(*MarketSnapshot)(nil),     // 6: marketgateway.v1.MarketSnapshot
-	(*VolatilityResponse)(nil), // 7: marketgateway.v1.VolatilityResponse
-	(*SubscribeResponse)(nil),  // 8: marketgateway.v1.SubscribeResponse
-	(*Kline)(nil),              // 9: marketgateway.v1.Kline
-	(*KlinesResponse)(nil),     // 10: marketgateway.v1.KlinesResponse
-	(*OrderBookEntry)(nil),     // 11: marketgateway.v1.OrderBookEntry
-	(*OrderBookResponse)(nil),  // 12: marketgateway.v1.OrderBookResponse
+	(*SnapshotRequest)(nil),     // 0: marketgateway.v1.SnapshotRequest
+	(*StreamRequest)(nil),       // 1: marketgateway.v1.StreamRequest
+	(*VolatilityRequest)(nil),   // 2: marketgateway.v1.VolatilityRequest
+	(*KlinesRequest)(nil),       // 3: marketgateway.v1.KlinesRequest
+	(*OrderBookRequest)(nil),    // 4: marketgateway.v1.OrderBookRequest
+	(*SubscribeRequest)(nil),    // 5: marketgateway.v1.SubscribeRequest
+	(*MarketSnapshot)(nil),      // 6: marketgateway.v1.MarketSnapshot
+	(*VolatilityResponse)(nil),  // 7: marketgateway.v1.VolatilityResponse
+	(*SubscribeResponse)(nil),   // 8: marketgateway.v1.SubscribeResponse
+	(*UnsubscribeRequest)(nil),  // 9: marketgateway.v1.UnsubscribeRequest
+	(*UnsubscribeResponse)(nil), // 10: marketgateway.v1.UnsubscribeResponse
+	(*Kline)(nil),               // 11: marketgateway.v1.Kline
+	(*KlinesResponse)(nil),      // 12: marketgateway.v1.KlinesResponse
+	(*OrderBookEntry)(nil),      // 13: marketgateway.v1.OrderBookEntry
+	(*OrderBookResponse)(nil),   // 14: marketgateway.v1.OrderBookResponse
 }
 var file_proto_market_gateway_proto_depIdxs = []int32{
-	9,  // 0: marketgateway.v1.KlinesResponse.klines:type_name -> marketgateway.v1.Kline
-	11, // 1: marketgateway.v1.OrderBookResponse.bids:type_name -> marketgateway.v1.OrderBookEntry
-	11, // 2: marketgateway.v1.OrderBookResponse.asks:type_name -> marketgateway.v1.OrderBookEntry
+	11, // 0: marketgateway.v1.KlinesResponse.klines:type_name -> marketgateway.v1.Kline
+	13, // 1: marketgateway.v1.OrderBookResponse.bids:type_name -> marketgateway.v1.OrderBookEntry
+	13, // 2: marketgateway.v1.OrderBookResponse.asks:type_name -> marketgateway.v1.OrderBookEntry
 	0,  // 3: marketgateway.v1.MarketDataService.GetMarketSnapshot:input_type -> marketgateway.v1.SnapshotRequest
 	1,  // 4: marketgateway.v1.MarketDataService.StreamMarketData:input_type -> marketgateway.v1.StreamRequest
 	2,  // 5: marketgateway.v1.MarketDataService.GetVolatilityScore:input_type -> marketgateway.v1.VolatilityRequest
 	3,  // 6: marketgateway.v1.MarketDataService.GetHistoricalKlines:input_type -> marketgateway.v1.KlinesRequest
 	4,  // 7: marketgateway.v1.MarketDataService.GetOrderBookDepth:input_type -> marketgateway.v1.OrderBookRequest
 	5,  // 8: marketgateway.v1.MarketDataService.SubscribeSymbol:input_type -> marketgateway.v1.SubscribeRequest
-	6,  // 9: marketgateway.v1.MarketDataService.GetMarketSnapshot:output_type -> marketgateway.v1.MarketSnapshot
-	6,  // 10: marketgateway.v1.MarketDataService.StreamMarketData:output_type -> marketgateway.v1.MarketSnapshot
-	7,  // 11: marketgateway.v1.MarketDataService.GetVolatilityScore:output_type -> marketgateway.v1.VolatilityResponse
-	10, // 12: marketgateway.v1.MarketDataService.GetHistoricalKlines:output_type -> marketgateway.v1.KlinesResponse
-	12, // 13: marketgateway.v1.MarketDataService.GetOrderBookDepth:output_type -> marketgateway.v1.OrderBookResponse
-	8,  // 14: marketgateway.v1.MarketDataService.SubscribeSymbol:output_type -> marketgateway.v1.SubscribeResponse
-	9,  // [9:15] is the sub-list for method output_type
-	3,  // [3:9] is the sub-list for method input_type
+	9,  // 9: marketgateway.v1.MarketDataService.UnsubscribeSymbol:input_type -> marketgateway.v1.UnsubscribeRequest
+	6,  // 10: marketgateway.v1.MarketDataService.GetMarketSnapshot:output_type -> marketgateway.v1.MarketSnapshot
+	6,  // 11: marketgateway.v1.MarketDataService.StreamMarketData:output_type -> marketgateway.v1.MarketSnapshot
+	7,  // 12: marketgateway.v1.MarketDataService.GetVolatilityScore:output_type -> marketgateway.v1.VolatilityResponse
+	12, // 13: marketgateway.v1.MarketDataService.GetHistoricalKlines:output_type -> marketgateway.v1.KlinesResponse
+	14, // 14: marketgateway.v1.MarketDataService.GetOrderBookDepth:output_type -> marketgateway.v1.OrderBookResponse
+	8,  // 15: marketgateway.v1.MarketDataService.SubscribeSymbol:output_type -> marketgateway.v1.SubscribeResponse
+	10, // 16: marketgateway.v1.MarketDataService.UnsubscribeSymbol:output_type -> marketgateway.v1.UnsubscribeResponse
+	10, // [10:17] is the sub-list for method output_type
+	3,  // [3:10] is the sub-list for method input_type
 	3,  // [3:3] is the sub-list for extension type_name
 	3,  // [3:3] is the sub-list for extension extendee
 	0,  // [0:3] is the sub-list for field type_name
@@ -872,7 +978,7 @@ func file_proto_market_gateway_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_market_gateway_proto_rawDesc), len(file_proto_market_gateway_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   13,
+			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -31,6 +31,7 @@ using TradeEngine.Infrastructure.Services.Outbox;
 using TradeEngine.Infrastructure.Services.TradeSettlement;
 using TradeEngine.Infrastructure.SignalR.Providers;
 using TradeEngine.Infrastructure.SignalR.Services;
+using TradeEngine.Infrastructure.Telemetry;
 
 namespace TradeEngine.Api.Extensions;
 
@@ -63,6 +64,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IMessagePublisher, RabbitMqPublisher>();
         services.AddSingleton<IMarketEventBus, MarketEventBus>();
         services.AddSingleton<DormantOrderTracker>();
+        services.AddSingleton<TradingMetrics>();
         services.AddSingleton<OutboxTrigger>();
         services.AddHostedService<RabbitMqListener>();
         services.AddHostedService<AiSignalListener>();
@@ -229,6 +231,8 @@ public static class ServiceCollectionExtensions
                     .AddMeter("Microsoft.AspNetCore.Server.Kestrel")
                     .AddMeter("System.Net.Http")
                     .AddMeter("TradeEngine.RedisCQRS")
+                    .AddMeter(TradingMetrics.MeterName)
+                    .AddMeter(SignalRConnectionTracker.MeterName)
                     .AddRuntimeInstrumentation()
                     .AddOtlpExporter(options =>
                     {

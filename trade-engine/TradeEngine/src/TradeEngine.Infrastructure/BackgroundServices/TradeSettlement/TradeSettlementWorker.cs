@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -10,6 +11,7 @@ using TradeEngine.Domain.Enums;
 using TradeEngine.Infrastructure.Persistence;
 using TradeEngine.Infrastructure.Services.Outbox;
 using TradeEngine.Infrastructure.Services.TradeSettlement;
+using TradeEngine.Infrastructure.Telemetry;
 
 namespace TradeEngine.Infrastructure.BackgroundServices.TradeSettlement;
 
@@ -17,6 +19,7 @@ public class TradeSettlementWorker(
     IServiceScopeFactory scopeFactory,
     SettlementQueue settlementQueue,
     OutboxTrigger outboxTrigger,
+    TradingMetrics tradingMetrics,
     ILogger<TradeSettlementWorker> logger) : BackgroundService
 {
      protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -25,6 +28,7 @@ public class TradeSettlementWorker(
 
         await foreach (var command in settlementQueue.Reader.ReadAllAsync(stoppingToken))
         {
+            var sw = Stopwatch.StartNew();
             try
             {
                 using var scope = scopeFactory.CreateScope();
@@ -139,6 +143,11 @@ public class TradeSettlementWorker(
             catch (Exception ex)
             {
                 logger.LogError("❌ Critical Settlement Error for Order {Id}: {Message}", command.OrderId, ex.Message);
+            }
+            finally
+            {
+                sw.Stop();
+                tradingMetrics.RecordSettlementDuration(sw.Elapsed.TotalMilliseconds);
             }
         }
     }

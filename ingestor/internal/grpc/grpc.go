@@ -3,24 +3,26 @@ package grpc
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"time"
 
 	pb "ingestor/gen/marketgateway/v1"
 	"ingestor/internal/cache"
 	"ingestor/internal/exchange"
+	"ingestor/internal/telemetry"
 
 	"google.golang.org/grpc"
 )
 
 type MarketDataServer struct {
 	pb.UnimplementedMarketDataServiceServer
-	cache *cache.MarketCache
+	cache   *cache.MarketCache
+	metrics *telemetry.IngestorMetrics
 }
 
-func NewMarketDataServer(c *cache.MarketCache) *MarketDataServer {
-	return &MarketDataServer{cache: c}
+func NewMarketDataServer(c *cache.MarketCache, m *telemetry.IngestorMetrics) *MarketDataServer {
+	return &MarketDataServer{cache: c, metrics: m}
 }
 
 func (s *MarketDataServer) GetMarketSnapshot(ctx context.Context, req *pb.SnapshotRequest) (*pb.MarketSnapshot, error) {
@@ -63,7 +65,7 @@ func (s *MarketDataServer) StreamMarketData(req *pb.StreamRequest, stream pb.Mar
 	for {
 		select {
 		case <-stream.Context().Done():
-			log.Println("[INFO] Client disconnected from gRPC stream")
+			slog.Info("Client disconnected from gRPC stream")
 			return nil
 		case <-ticker.C:
 			for _, symbol := range req.Symbols {
@@ -86,7 +88,7 @@ func (s *MarketDataServer) StreamMarketData(req *pb.StreamRequest, stream pb.Mar
 func (s *MarketDataServer) GetHistoricalKlines(ctx context.Context, req *pb.KlinesRequest) (*pb.KlinesResponse, error) {
 	klinesData, err := exchange.FetchHistoricalKlines(ctx, req.Symbol, req.Interval, req.Limit)
 	if err != nil {
-		log.Printf("[ERROR] Failed to fetch klines: %v", err)
+		slog.Error("Failed to fetch klines", "symbol", req.Symbol, "error", err)
 		return nil, err
 	}
 
@@ -112,7 +114,7 @@ func (s *MarketDataServer) GetHistoricalKlines(ctx context.Context, req *pb.Klin
 func (s *MarketDataServer) GetOrderBookDepth(ctx context.Context, req *pb.OrderBookRequest) (*pb.OrderBookResponse, error) {
 	depthData, err := exchange.FetchOrderBookDepth(ctx, req.Symbol, req.Limit)
 	if err != nil {
-		log.Printf("[ERROR] Failed to fetch depth: %v", err)
+		slog.Error("Failed to fetch order book depth", "symbol", req.Symbol, "error", err)
 		return nil, err
 	}
 
@@ -133,31 +135,48 @@ func (s *MarketDataServer) GetOrderBookDepth(ctx context.Context, req *pb.OrderB
 	return response, nil
 }
 
-// ✨ NEW: Handles the new /track API call from the React frontend
 func (s *MarketDataServer) SubscribeSymbol(ctx context.Context, req *pb.SubscribeRequest) (*pb.SubscribeResponse, error) {
 	isNew := exchange.SubManager.Subscribe(req.Symbol)
 
 	if isNew {
-		log.Printf("[INFO] gRPC Request triggered NEW dynamic subscription for %s", req.Symbol)
+		slog.Info("gRPC triggered new dynamic subscription", "symbol", req.Symbol)
+		if s.metrics != nil {
+			s.metrics.ActiveSubscriptions.Add(ctx, 1)
+		}
 		return &pb.SubscribeResponse{Success: true, Message: "Successfully opened live stream for " + req.Symbol}, nil
 	}
 
 	return &pb.SubscribeResponse{Success: true, Message: "Stream already active"}, nil
 }
 
-func StartServer(port string, c *cache.MarketCache) *grpc.Server {
+func (s *MarketDataServer) UnsubscribeSymbol(ctx context.Context, req *pb.UnsubscribeRequest) (*pb.UnsubscribeResponse, error) {
+	removed := exchange.SubManager.Unsubscribe(req.Symbol)
+
+	if removed {
+		slog.Info("gRPC triggered dynamic unsubscription", "symbol", req.Symbol)
+		if s.metrics != nil {
+			s.metrics.ActiveSubscriptions.Add(ctx, -1)
+		}
+		return &pb.UnsubscribeResponse{Success: true, Message: "Stopped streaming " + req.Symbol}, nil
+	}
+
+	return &pb.UnsubscribeResponse{Success: true, Message: "Stream was not active"}, nil
+}
+
+func StartServer(port string, c *cache.MarketCache, m *telemetry.IngestorMetrics) *grpc.Server {
 	lis, err := net.Listen("tcp", port)
 	if err != nil {
-		log.Fatalf("[FATAL] Failed to listen on gRPC port: %v", err)
+		slog.Error("Failed to listen on gRPC port", "port", port, "error", err)
+		panic(err)
 	}
 
 	grpcServer := grpc.NewServer()
-	pb.RegisterMarketDataServiceServer(grpcServer, NewMarketDataServer(c))
+	pb.RegisterMarketDataServiceServer(grpcServer, NewMarketDataServer(c, m))
 
 	go func() {
-		log.Printf("[INFO] gRPC MarketGateway listening on %s", port)
+		slog.Info("gRPC MarketGateway listening", "port", port)
 		if err := grpcServer.Serve(lis); err != nil {
-			log.Printf("[WARN] gRPC Server stopped: %v", err)
+			slog.Warn("gRPC Server stopped", "error", err)
 		}
 	}()
 

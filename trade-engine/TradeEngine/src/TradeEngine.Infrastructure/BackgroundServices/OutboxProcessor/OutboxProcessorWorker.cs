@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using TradeEngine.Application.Interfaces;
 using TradeEngine.Infrastructure.Persistence;
 using TradeEngine.Infrastructure.Services.Outbox;
+using TradeEngine.Infrastructure.Telemetry;
 
 namespace TradeEngine.Infrastructure.BackgroundServices.OutboxProcessor;
 
@@ -12,6 +13,7 @@ public class OutboxProcessorWorker(
     IServiceProvider serviceProvider,
     IMessagePublisher messagePublisher,
     OutboxTrigger outboxTrigger,
+    TradingMetrics tradingMetrics,
     ILogger<OutboxProcessorWorker> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -63,10 +65,10 @@ public class OutboxProcessorWorker(
 
         foreach (var message in messages)
         {
-            // Publish to RabbitMQ -> AI Analyst
             await messagePublisher.PublishAsync(message.Type, message.Content, stoppingToken);
 
             message.ProcessedOnUtc = DateTime.UtcNow;
+            tradingMetrics.RecordOutboxPublished();
             logger.LogDebug("Processed outbox message {MessageId}", message.Id);
         }
 

@@ -3,7 +3,7 @@ import logging
 import os
 import pika
 import time
-from opentelemetry import trace
+from opentelemetry import trace, metrics
 from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 from app.services.analyzer import analyzer
 
@@ -11,6 +11,10 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 logger = logging.getLogger("AI_Rabbit_Worker")
 
 tracer = trace.get_tracer(__name__)
+meter = metrics.get_meter(__name__)
+analyses_counter = meter.create_counter("ai_analyst.analyses_performed", description="Total analyses performed")
+signal_counter = meter.create_counter("ai_analyst.signal_distribution", description="Distribution of AI signals by type")
+inference_histogram = meter.create_histogram("ai_analyst.inference_duration_ms", unit="ms", description="FinBERT inference duration")
 
 class AIRabbitWorker:
     def __init__(self, amqp_url: str):
@@ -55,9 +59,14 @@ class AIRabbitWorker:
             headline = f"Standard market execution: {side} order for {symbol} cleared at ${price:,.2f}."
 
         try:
-            # Run the FinBERT inference
+            start = time.perf_counter()
             ai_response = analyzer.predict(headline)
-            
+            duration_ms = (time.perf_counter() - start) * 1000
+
+            inference_histogram.record(duration_ms, {"symbol": symbol})
+            analyses_counter.add(1, {"symbol": symbol})
+            signal_counter.add(1, {"signal": ai_response.label})
+
             return {
                 "Symbol": symbol,
                 "Signal": ai_response.label,

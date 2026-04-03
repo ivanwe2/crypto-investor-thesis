@@ -9,6 +9,7 @@ using TradeEngine.Application.Features.Orders.GetHistory;
 using TradeEngine.Application.Features.Orders.GetOpenOrders;
 using TradeEngine.Application.Features.Orders.PlaceOrder;
 using TradeEngine.Application.Interfaces;
+using TradeEngine.Infrastructure.Telemetry;
 
 namespace TradeEngine.Api.Endpoints;
 
@@ -42,9 +43,10 @@ public static class OrderEndpoints
     }
     
     private static async Task<Results<Ok<OrderResponse>, BadRequest<string>>> PlaceOrderAsync(
-        [FromBody] PlaceOrderRequest request, 
-        ISender sender, 
+        [FromBody] PlaceOrderRequest request,
+        ISender sender,
         ICurrentUserService currentUserService,
+        TradingMetrics tradingMetrics,
         CancellationToken ct)
     {
         var command = new PlaceOrderCommand(
@@ -58,10 +60,14 @@ public static class OrderEndpoints
         );
 
         var result = await sender.Send(command, ct);
-        
-        return result.IsSuccess 
-            ? TypedResults.Ok(result.Value) 
-            : TypedResults.BadRequest(result.Error.Name);
+
+        if (result.IsSuccess)
+        {
+            tradingMetrics.RecordOrderPlaced(request.Type.ToString(), request.Side.ToString());
+            return TypedResults.Ok(result.Value);
+        }
+
+        return TypedResults.BadRequest(result.Error.Name);
     }
     private static async Task<Results<Ok<List<OpenOrderDto>>, BadRequest<string>>> GetOpenOrdersAsync(
         ISender sender, 
