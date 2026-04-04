@@ -71,7 +71,7 @@ public class PlaceOrderCommandHandler(
                 
             await redisService.AddOpenOrderAsync(request.UserId, orderDto, cancellationToken);
 
-            var balances = wallet.Balances.Select(b => new AssetBalanceDto(b.Currency, b.Amount)).ToList();
+            var balances = wallet.Balances.Select(b => new AssetBalanceDto(b.Currency, b.Amount, 0, null)).ToList();
             var walletResponse = new WalletResponse(wallet.Id, balances);
             
             await redisService.UpdateUserPortfolioAsync(request.UserId, walletResponse, cancellationToken);

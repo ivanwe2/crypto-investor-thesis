@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import {
   Card,
   Text,
+  Badge,
   Button,
   Spinner,
   tokens,
@@ -75,6 +76,13 @@ const useStyles = makeStyles({
   assetValues: {
     textAlign: "right",
   },
+  pnlRow: {
+    display: "flex",
+    justifyContent: "flex-end",
+    alignItems: "center",
+    ...shorthands.gap("6px"),
+    marginTop: "4px",
+  },
   loadingWrapper: {
     ...shorthands.padding("2rem"),
     display: "flex",
@@ -93,12 +101,15 @@ export const PortfolioPage = () => {
     const enrichedAssets = wallet.balances
       .map((b) => {
         const isQuote = b.currency === "USDT" || b.currency === "USD";
-        const currentPrice = isQuote
-          ? 1
-          : tickers[`${b.currency}USDT`]?.price || 0;
+        const realtimePrice = tickers[`${b.currency}USDT`]?.price;
+        const currentPrice = isQuote ? 1 : (realtimePrice || b.currentPrice || 0);
         const valueInUsd = b.amount * currentPrice;
+        const entryPrice = isQuote ? null : b.averageEntryPrice;
+        const pnlPercent = entryPrice && entryPrice > 0
+          ? ((currentPrice - entryPrice) / entryPrice) * 100
+          : null;
 
-        return { ...b, currentPrice, valueInUsd };
+        return { ...b, currentPrice, valueInUsd, entryPrice, pnlPercent };
       })
       .sort((a, b) => b.valueInUsd - a.valueInUsd);
 
@@ -184,6 +195,20 @@ export const PortfolioPage = () => {
                   <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
                     {asset.amount.toLocaleString(undefined, { maximumFractionDigits: 6 })} {asset.currency}
                   </Text>
+                  {asset.pnlPercent !== null && (
+                    <div className={styles.pnlRow}>
+                      <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+                        Entry: ${asset.entryPrice!.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </Text>
+                      <Badge
+                        size="small"
+                        appearance="filled"
+                        color={asset.pnlPercent >= 0 ? "success" : "danger"}
+                      >
+                        {asset.pnlPercent >= 0 ? "+" : ""}{asset.pnlPercent.toFixed(2)}%
+                      </Badge>
+                    </div>
+                  )}
                 </div>
               </div>
             </Card>

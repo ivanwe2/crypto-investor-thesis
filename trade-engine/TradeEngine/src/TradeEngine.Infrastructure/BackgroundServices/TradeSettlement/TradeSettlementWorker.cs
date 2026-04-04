@@ -128,7 +128,7 @@ public class TradeSettlementWorker(
                     {
                         await redisService.RemoveOpenOrderAsync(order.UserId, order.Id, stoppingToken);
                         
-                        var balances = wallet.Balances.Select(b => new AssetBalanceDto(b.Currency, b.Amount)).ToList();
+                        var balances = wallet.Balances.Select(b => new AssetBalanceDto(b.Currency, b.Amount, 0, null)).ToList();
                         var walletResponse = new WalletResponse(wallet.Id, balances);
                         await redisService.UpdateUserPortfolioAsync(order.UserId, walletResponse, stoppingToken);
                     }
