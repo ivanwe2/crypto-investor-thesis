@@ -110,8 +110,8 @@
       },
       "targets": [
         {
-          "expr": "rate(process_runtime_dotnet_gc_collections_count_total[5m])",
-          "legendFormat": "gen{{ generation }}",
+          "expr": "rate(dotnet_gc_collections_total[5m])",
+          "legendFormat": "gen{{generation}}",
           "refId": "A"
         }
       ]
@@ -127,8 +127,8 @@
       },
       "targets": [
         {
-          "expr": "process_runtime_dotnet_gc_heap_size_bytes",
-          "legendFormat": "gen{{ generation }}",
+          "expr": "dotnet_gc_heap_total_allocated_bytes",
+          "legendFormat": "heap",
           "refId": "A"
         }
       ]
