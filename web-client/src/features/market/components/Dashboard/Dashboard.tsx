@@ -22,6 +22,7 @@ import { useAuthStore } from "../../../auth/store/authStore";
 import { useWatchlistStore } from "../../store/watchlistStore";
 import { marketService } from "../../services/marketService";
 import { SentimentWidget } from "../../../ai/components/SentimentWidget";
+import { AiSignalsFeed } from "../../../ai/components/AiSignalsFeed";
 import { PopularMarkets } from "./PopularMarkets";
 import { formatPrice } from "../../../../shared/utils/formatPrice";
 
@@ -361,6 +362,7 @@ export const Dashboard = () => {
         {/* Sidebar */}
         <div className={styles.sidebar}>
           <SentimentWidget />
+          <AiSignalsFeed />
         </div>
       </div>
     </div>

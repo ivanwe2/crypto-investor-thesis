@@ -4,6 +4,7 @@ import { AppConfig } from '../config/AppConfig';
 import { useNotificationStore } from '../store/notificationStore';
 import { useWalletStore } from '../../features/portfolio/store/walletStore';
 import { useAuthStore } from '../../features/auth/store/authStore';
+import { useAiSignalsStore } from '../../features/ai/store/aiSignalsStore';
 
 class SignalRService {
     private connection: signalR.HubConnection | null = null;
@@ -69,21 +70,31 @@ class SignalRService {
                 this.priceBuffer[data.s] = data; 
             });
 
-            this.connection.on(AppConfig.SignalR.Events.OrderFilled, (data: { symbol: string, quantity: number, price: number }) => {
+            this.connection.on(AppConfig.SignalR.Events.OrderFilled, (data: { symbol: string, quantity: number, price: number, side: string }) => {
                 console.log("🔥 Order Filled Event Received from SignalR:", data);
-                
-                const message = `Order Executed! Bought ${data.quantity} ${data.symbol} at $${data.price.toLocaleString()}`;
-                useNotificationStore.getState().addNotification(message, 'success');
+
+                const action = data.side === 'Sell' ? 'Sold' : 'Bought';
+                const message = `Order Executed! ${action} ${data.quantity} ${data.symbol} at $${data.price.toLocaleString()}`;
+                useNotificationStore.getState().addNotification(message, data.side === 'Sell' ? 'info' : 'success');
 
                 useWalletStore.getState().fetchWallet();
             });
 
-            this.connection.on("ReceiveAiSignal", (data: { symbol: string, signal: string, confidence: number, reason: string }) => {
+            this.connection.on("ReceiveAiSignal", (data: { symbol: string, signal: string, confidence: number, reason: string, side: string, timestamp: string }) => {
                 console.log("🤖 AI Signal Received:", data);
-                
+
+                useAiSignalsStore.getState().addSignal({
+                    symbol: data.symbol,
+                    signal: data.signal as 'BULLISH' | 'BEARISH' | 'NEUTRAL',
+                    confidence: data.confidence,
+                    reason: data.reason,
+                    side: data.side,
+                    timestamp: data.timestamp,
+                });
+
+                const icon = data.signal === 'BULLISH' ? '↑' : data.signal === 'BEARISH' ? '↓' : '→';
                 const confidencePercent = (data.confidence * 100).toFixed(0);
-                const message = `🤖 AI Alert: ${data.symbol} is ${data.signal} (${confidencePercent}%)\n\n${data.reason}`;
-                
+                const message = `AI ${icon} ${data.symbol} ${data.signal} (${confidencePercent}%)\n${data.reason}`;
                 useNotificationStore.getState().addNotification(message, 'ai');
             });
 

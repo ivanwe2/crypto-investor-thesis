@@ -137,7 +137,7 @@ public class TradeSettlementWorker(
                         logger.LogWarning(ex, "⚠️ Synchronous Redis update failed. UI may experience a slight delay.");
                     }
 
-                    _ = tradeNotifier.NotifyOrderFilledAsync(order.UserId, order.Symbol, order.Quantity, command.ExecutionPrice);
+                    _ = tradeNotifier.NotifyOrderFilledAsync(order.UserId, order.Symbol, order.Quantity, command.ExecutionPrice, order.Side);
                 });
             }
             catch (Exception ex)
