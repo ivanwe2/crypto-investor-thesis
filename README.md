@@ -22,41 +22,38 @@ The system is composed of five primary services communicating via a mix of synch
 ### System Diagram
 
 ```mermaid
-graph TD
-    %% Core Services
-    UI["💻 Web Client<br/>(React/TypeScript)"]
-    TE["⚙️ Trade Engine<br/>(.NET/C#)"]
-    IN["📥 Ingestor<br/>(Go)"]
-    AI["🧠 AI Analyst<br/>(Python/FastAPI)"]
+graph LR
+    %% Core Flow
+    EX["🌐 External Exchanges"] -->|WebSocket| IN["📥 Ingestor (Go)"]
+    IN -->|gRPC Stream| TE["⚙️ Trade Engine (.NET)"]
+    UI["💻 Web Client (React)"] <-->|REST & SignalR| TE
     
-    %% External & Persistence
-    EX["🌐 External Exchanges"]
-    DB[("🐘 PostgreSQL")]
-    REDIS[("⚡ Redis Cache")]
-    MQ["🐇 RabbitMQ"]
+    %% Infrastructure & External Services
+    subgraph Data & AI
+        direction TB
+        DB[("🐘 PostgreSQL")]
+        REDIS[("⚡ Redis Cache")]
+        MQ["🐇 RabbitMQ"]
+        AI["🧠 AI Analyst (Python)"]
+    end
     
-    %% Connections
-    UI <-->|REST & SignalR| TE
-    IN <-->|WebSocket| EX
-    IN -->|gRPC Stream| TE
-    TE <-->|RabbitMQ| AI
+    %% Connections to Data/AI
     TE <-->|EF Core| DB
-    TE <-->|Session / Market| REDIS
+    TE <-->|State/Cache| REDIS
+    TE <-->|Pub/Sub| MQ
+    MQ <-->|Consume/Reply| AI
     
-    %% Observability
-    subgraph "Observability Stack"
+    %% Observability Stack
+    subgraph Observability
+        direction TB
         OTEL["OTel Collector"]
         PROM["Prometheus"]
         TEMPO["Tempo"]
         LOKI["Loki"]
         GRAF["Grafana"]
         
-        OTEL --> PROM
-        OTEL --> TEMPO
-        OTEL --> LOKI
-        PROM --> GRAF
-        TEMPO --> GRAF
-        LOKI --> GRAF
+        OTEL --> PROM & TEMPO & LOKI
+        PROM & TEMPO & LOKI --> GRAF
     end
     
     %% Telemetry Links
