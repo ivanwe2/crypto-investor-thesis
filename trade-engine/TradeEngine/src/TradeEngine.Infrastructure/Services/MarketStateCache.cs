@@ -1,12 +1,7 @@
 using System.Collections.Concurrent;
+using TradeEngine.Application.Interfaces;
 
 namespace TradeEngine.Infrastructure.Services;
-
-public interface IMarketStateCache
-{
-    void UpdatePrice(string symbol, decimal price);
-    IReadOnlyDictionary<string, decimal> GetLatestPrices();
-}
 
 public class MarketStateCache : IMarketStateCache
 {

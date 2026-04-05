@@ -1,3 +1,7 @@
 namespace TradeEngine.Application.DTOs.Wallet;
 
-public record AssetBalanceDto(string Currency, decimal Amount);
+public record AssetBalanceDto(
+    string Currency,
+    decimal Amount,
+    decimal CurrentPrice,
+    decimal? AverageEntryPrice);

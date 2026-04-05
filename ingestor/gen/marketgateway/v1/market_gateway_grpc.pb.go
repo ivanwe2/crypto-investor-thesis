@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.6.1
 // - protoc             v7.34.0
-// source: market_gateway.proto
+// source: proto/market_gateway.proto
 
 package v1
 
@@ -24,24 +24,21 @@ const (
 	MarketDataService_GetVolatilityScore_FullMethodName  = "/marketgateway.v1.MarketDataService/GetVolatilityScore"
 	MarketDataService_GetHistoricalKlines_FullMethodName = "/marketgateway.v1.MarketDataService/GetHistoricalKlines"
 	MarketDataService_GetOrderBookDepth_FullMethodName   = "/marketgateway.v1.MarketDataService/GetOrderBookDepth"
+	MarketDataService_SubscribeSymbol_FullMethodName     = "/marketgateway.v1.MarketDataService/SubscribeSymbol"
+	MarketDataService_UnsubscribeSymbol_FullMethodName   = "/marketgateway.v1.MarketDataService/UnsubscribeSymbol"
 )
 
 // MarketDataServiceClient is the client API for MarketDataService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-//
-// The core gRPC service our Go app will serve
 type MarketDataServiceClient interface {
-	// Unary: Gets a single snapshot instantly from the Go RWMutex Cache
 	GetMarketSnapshot(ctx context.Context, in *SnapshotRequest, opts ...grpc.CallOption) (*MarketSnapshot, error)
-	// Server-streaming: Maintains a persistent open connection (faster than RabbitMQ!)
 	StreamMarketData(ctx context.Context, in *StreamRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[MarketSnapshot], error)
-	// Unary: AI/Matching engine checks this before allowing a trade
 	GetVolatilityScore(ctx context.Context, in *VolatilityRequest, opts ...grpc.CallOption) (*VolatilityResponse, error)
-	// Unary: Fetch historical OHLCV data for Candlestick charting
 	GetHistoricalKlines(ctx context.Context, in *KlinesRequest, opts ...grpc.CallOption) (*KlinesResponse, error)
-	// Unary: Fetch the current order book depth (bids and asks) for visual mapping
 	GetOrderBookDepth(ctx context.Context, in *OrderBookRequest, opts ...grpc.CallOption) (*OrderBookResponse, error)
+	SubscribeSymbol(ctx context.Context, in *SubscribeRequest, opts ...grpc.CallOption) (*SubscribeResponse, error)
+	UnsubscribeSymbol(ctx context.Context, in *UnsubscribeRequest, opts ...grpc.CallOption) (*UnsubscribeResponse, error)
 }
 
 type marketDataServiceClient struct {
@@ -111,22 +108,37 @@ func (c *marketDataServiceClient) GetOrderBookDepth(ctx context.Context, in *Ord
 	return out, nil
 }
 
+func (c *marketDataServiceClient) SubscribeSymbol(ctx context.Context, in *SubscribeRequest, opts ...grpc.CallOption) (*SubscribeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SubscribeResponse)
+	err := c.cc.Invoke(ctx, MarketDataService_SubscribeSymbol_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *marketDataServiceClient) UnsubscribeSymbol(ctx context.Context, in *UnsubscribeRequest, opts ...grpc.CallOption) (*UnsubscribeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UnsubscribeResponse)
+	err := c.cc.Invoke(ctx, MarketDataService_UnsubscribeSymbol_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MarketDataServiceServer is the server API for MarketDataService service.
 // All implementations must embed UnimplementedMarketDataServiceServer
 // for forward compatibility.
-//
-// The core gRPC service our Go app will serve
 type MarketDataServiceServer interface {
-	// Unary: Gets a single snapshot instantly from the Go RWMutex Cache
 	GetMarketSnapshot(context.Context, *SnapshotRequest) (*MarketSnapshot, error)
-	// Server-streaming: Maintains a persistent open connection (faster than RabbitMQ!)
 	StreamMarketData(*StreamRequest, grpc.ServerStreamingServer[MarketSnapshot]) error
-	// Unary: AI/Matching engine checks this before allowing a trade
 	GetVolatilityScore(context.Context, *VolatilityRequest) (*VolatilityResponse, error)
-	// Unary: Fetch historical OHLCV data for Candlestick charting
 	GetHistoricalKlines(context.Context, *KlinesRequest) (*KlinesResponse, error)
-	// Unary: Fetch the current order book depth (bids and asks) for visual mapping
 	GetOrderBookDepth(context.Context, *OrderBookRequest) (*OrderBookResponse, error)
+	SubscribeSymbol(context.Context, *SubscribeRequest) (*SubscribeResponse, error)
+	UnsubscribeSymbol(context.Context, *UnsubscribeRequest) (*UnsubscribeResponse, error)
 	mustEmbedUnimplementedMarketDataServiceServer()
 }
 
@@ -151,6 +163,12 @@ func (UnimplementedMarketDataServiceServer) GetHistoricalKlines(context.Context,
 }
 func (UnimplementedMarketDataServiceServer) GetOrderBookDepth(context.Context, *OrderBookRequest) (*OrderBookResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetOrderBookDepth not implemented")
+}
+func (UnimplementedMarketDataServiceServer) SubscribeSymbol(context.Context, *SubscribeRequest) (*SubscribeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SubscribeSymbol not implemented")
+}
+func (UnimplementedMarketDataServiceServer) UnsubscribeSymbol(context.Context, *UnsubscribeRequest) (*UnsubscribeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UnsubscribeSymbol not implemented")
 }
 func (UnimplementedMarketDataServiceServer) mustEmbedUnimplementedMarketDataServiceServer() {}
 func (UnimplementedMarketDataServiceServer) testEmbeddedByValue()                           {}
@@ -256,6 +274,42 @@ func _MarketDataService_GetOrderBookDepth_Handler(srv interface{}, ctx context.C
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MarketDataService_SubscribeSymbol_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SubscribeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MarketDataServiceServer).SubscribeSymbol(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MarketDataService_SubscribeSymbol_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MarketDataServiceServer).SubscribeSymbol(ctx, req.(*SubscribeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MarketDataService_UnsubscribeSymbol_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UnsubscribeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MarketDataServiceServer).UnsubscribeSymbol(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MarketDataService_UnsubscribeSymbol_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MarketDataServiceServer).UnsubscribeSymbol(ctx, req.(*UnsubscribeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MarketDataService_ServiceDesc is the grpc.ServiceDesc for MarketDataService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -279,6 +333,14 @@ var MarketDataService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "GetOrderBookDepth",
 			Handler:    _MarketDataService_GetOrderBookDepth_Handler,
 		},
+		{
+			MethodName: "SubscribeSymbol",
+			Handler:    _MarketDataService_SubscribeSymbol_Handler,
+		},
+		{
+			MethodName: "UnsubscribeSymbol",
+			Handler:    _MarketDataService_UnsubscribeSymbol_Handler,
+		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
@@ -287,5 +349,5 @@ var MarketDataService_ServiceDesc = grpc.ServiceDesc{
 			ServerStreams: true,
 		},
 	},
-	Metadata: "market_gateway.proto",
+	Metadata: "proto/market_gateway.proto",
 }

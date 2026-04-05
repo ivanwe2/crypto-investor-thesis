@@ -8,16 +8,23 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 12px;
+  margin-bottom: 4px;
+
+  svg {
+    color: #A855F7;
+  }
 }
 
 .resultBox {
-  margin-top: 16px;
-  padding: 12px;
-  border-radius: 6px;
+  margin-top: 8px;
+  padding: 14px;
+  border-radius: var(--ct-radius-md);
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
+  background: var(--ct-bg-elevated);
+  border: 1px solid var(--ct-border);
+  animation: ct-fade-in 0.3s ease-out both;
 }
 
 .resultHeader {

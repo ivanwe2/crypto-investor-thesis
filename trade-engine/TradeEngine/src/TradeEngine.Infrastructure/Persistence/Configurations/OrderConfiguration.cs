@@ -21,6 +21,7 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
         builder.Property(x => x.Quantity).HasPrecision(18, 8);
         builder.Property(x => x.TargetPrice).HasPrecision(18, 8);
         builder.Property(x => x.ExecutionPrice).HasPrecision(18, 8);
+        builder.Property(x => x.StopPrice).HasPrecision(18, 8).IsRequired(false);
 
         builder.Property(x => x.Side).HasConversion<string>().HasMaxLength(10);
         builder.Property(x => x.Type).HasConversion<string>().HasMaxLength(10);

@@ -95,7 +95,7 @@ services:
       - RabbitMq__ManagementUrl=http://rabbitmq:15672/api/queues/%2f/trade_engine_queue
       - Otlp__Endpoint=http://otel-collector:4317
       - Otlp__ServiceName=thesis-trade-engine
-      - Otlp__ServiceVersion=v0.4.0
+      - Otlp__ServiceVersion=v0.9.0
       - MarketGateway__Url=http://ingestor:50051
       - MarketGateway__HealthUrl=http://ingestor:8081/healthz
       - AiAnalyst__HealthUrl=http://ai-analyst:8000/healthz
@@ -132,7 +132,7 @@ services:
       - thesis-network
 
   # ==========================================
-  # Observability Stack (v0.4)
+  # Observability Stack (v0.9)
   # ==========================================
   
   otel-collector:
@@ -153,6 +153,7 @@ services:
       - --enable-feature=exemplar-storage
     volumes:
       - ./infra/observability/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./infra/observability/prometheus-alerts.yml:/etc/prometheus/alerts.yml
     ports:
       - "9090:9090"
     networks:
@@ -163,6 +164,7 @@ services:
     command: [ "-config.file=/etc/tempo.yaml" ]
     volumes:
       - ./infra/observability/tempo.yaml:/etc/tempo.yaml
+      - tempo_data:/var/tempo
     ports:
       - "3200:3200"
       - "4317"
@@ -172,6 +174,9 @@ services:
   loki:
     image: grafana/loki:2.9.0
     container_name: loki
+    command: ["-config.file=/etc/loki/loki-config.yaml"]
+    volumes:
+      - ./infra/observability/loki-config.yaml:/etc/loki/loki-config.yaml
     ports:
       - "3100:3100"
     networks:
@@ -185,8 +190,10 @@ services:
       - GF_AUTH_DISABLE_LOGIN_FORM=true
     volumes:
       - ./infra/observability/grafana/datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml
+      - ./infra/observability/grafana/dashboards.yaml:/etc/grafana/provisioning/dashboards/dashboards.yaml
+      - ./infra/observability/grafana/dashboards:/var/lib/grafana/dashboards
     ports:
-      - "3001:3000" # Changed from 3000 to 3001 to avoid React conflict
+      - "3001:3000"
     depends_on:
       - prometheus
       - tempo
@@ -200,3 +207,4 @@ networks:
 
 volumes:
   postgres_data:
+  tempo_data:

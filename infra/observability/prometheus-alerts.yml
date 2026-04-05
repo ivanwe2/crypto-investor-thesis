@@ -1,0 +1,42 @@
+groups:
+  - name: trading_platform_alerts
+    rules:
+      - alert: HighErrorRate
+        expr: rate(http_server_request_duration_seconds_count{http_response_status_code=~"5.."}[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High 5xx error rate on {{ $labels.job }}"
+
+      - alert: SettlementSlowdown
+        expr: histogram_quantile(0.95, rate(trade_engine_settlement_duration_ms_bucket[5m])) > 5000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Settlement P95 latency exceeding 5 seconds"
+
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.job }} is down"
+
+      - alert: RedisHighMemory
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis memory usage above 80%"
+
+      - alert: HighMatchingLoopLatency
+        expr: histogram_quantile(0.99, rate(trade_engine_matching_loop_duration_ms_bucket[5m])) > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Order matching P99 latency exceeding 100ms"

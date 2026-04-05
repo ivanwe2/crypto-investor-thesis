@@ -24,7 +24,7 @@ clean:
 
 # Generates the Go code from your proto file
 proto:
-	protoc --go_out=. --go-grpc_out=. proto/market_gateway.proto
+	protoc --go_out=. --go_opt=module=ingestor --go-grpc_out=. --go-grpc_opt=module=ingestor proto/market_gateway.proto
 
 # Builds the Docker container
 docker:

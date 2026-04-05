@@ -3,28 +3,28 @@ package grpc
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"time"
 
 	pb "ingestor/gen/marketgateway/v1"
 	"ingestor/internal/cache"
 	"ingestor/internal/exchange"
+	"ingestor/internal/telemetry"
 
 	"google.golang.org/grpc"
 )
 
-// MarketDataServer implements the generated protobuf interface
 type MarketDataServer struct {
 	pb.UnimplementedMarketDataServiceServer
-	cache *cache.MarketCache
+	cache   *cache.MarketCache
+	metrics *telemetry.IngestorMetrics
 }
 
-func NewMarketDataServer(c *cache.MarketCache) *MarketDataServer {
-	return &MarketDataServer{cache: c}
+func NewMarketDataServer(c *cache.MarketCache, m *telemetry.IngestorMetrics) *MarketDataServer {
+	return &MarketDataServer{cache: c, metrics: m}
 }
 
-// 1. Unary Request: Get a single snapshot instantly
 func (s *MarketDataServer) GetMarketSnapshot(ctx context.Context, req *pb.SnapshotRequest) (*pb.MarketSnapshot, error) {
 	snap, exists := s.cache.GetSnapshot(req.Symbol)
 	if !exists {
@@ -38,7 +38,6 @@ func (s *MarketDataServer) GetMarketSnapshot(ctx context.Context, req *pb.Snapsh
 	}, nil
 }
 
-// 2. Unary Request: Get volatility regime
 func (s *MarketDataServer) GetVolatilityScore(ctx context.Context, req *pb.VolatilityRequest) (*pb.VolatilityResponse, error) {
 	snap, exists := s.cache.GetSnapshot(req.Symbol)
 	if !exists {
@@ -59,7 +58,6 @@ func (s *MarketDataServer) GetVolatilityScore(ctx context.Context, req *pb.Volat
 	}, nil
 }
 
-// 3. Streaming Request: Push continuous updates to the client
 func (s *MarketDataServer) StreamMarketData(req *pb.StreamRequest, stream pb.MarketDataService_StreamMarketDataServer) error {
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
@@ -67,7 +65,7 @@ func (s *MarketDataServer) StreamMarketData(req *pb.StreamRequest, stream pb.Mar
 	for {
 		select {
 		case <-stream.Context().Done():
-			log.Println("[INFO] Client disconnected from gRPC stream")
+			slog.Info("Client disconnected from gRPC stream")
 			return nil
 		case <-ticker.C:
 			for _, symbol := range req.Symbols {
@@ -87,11 +85,10 @@ func (s *MarketDataServer) StreamMarketData(req *pb.StreamRequest, stream pb.Mar
 	}
 }
 
-// 4. ✨ NEW: Fetch Historical Klines via REST fallback
 func (s *MarketDataServer) GetHistoricalKlines(ctx context.Context, req *pb.KlinesRequest) (*pb.KlinesResponse, error) {
 	klinesData, err := exchange.FetchHistoricalKlines(ctx, req.Symbol, req.Interval, req.Limit)
 	if err != nil {
-		log.Printf("[ERROR] Failed to fetch klines: %v", err)
+		slog.Error("Failed to fetch klines", "symbol", req.Symbol, "error", err)
 		return nil, err
 	}
 
@@ -114,11 +111,10 @@ func (s *MarketDataServer) GetHistoricalKlines(ctx context.Context, req *pb.Klin
 	return response, nil
 }
 
-// 5. ✨ NEW: Fetch Order Book Depth via REST fallback
 func (s *MarketDataServer) GetOrderBookDepth(ctx context.Context, req *pb.OrderBookRequest) (*pb.OrderBookResponse, error) {
 	depthData, err := exchange.FetchOrderBookDepth(ctx, req.Symbol, req.Limit)
 	if err != nil {
-		log.Printf("[ERROR] Failed to fetch depth: %v", err)
+		slog.Error("Failed to fetch order book depth", "symbol", req.Symbol, "error", err)
 		return nil, err
 	}
 
@@ -139,25 +135,50 @@ func (s *MarketDataServer) GetOrderBookDepth(ctx context.Context, req *pb.OrderB
 	return response, nil
 }
 
-// StartServer spins up the gRPC listener on a background thread
-func StartServer(port string, c *cache.MarketCache) *grpc.Server {
+func (s *MarketDataServer) SubscribeSymbol(ctx context.Context, req *pb.SubscribeRequest) (*pb.SubscribeResponse, error) {
+	isNew := exchange.SubManager.Subscribe(req.Symbol)
+
+	if isNew {
+		slog.Info("gRPC triggered new dynamic subscription", "symbol", req.Symbol)
+		if s.metrics != nil {
+			s.metrics.ActiveSubscriptions.Add(ctx, 1)
+		}
+		return &pb.SubscribeResponse{Success: true, Message: "Successfully opened live stream for " + req.Symbol}, nil
+	}
+
+	return &pb.SubscribeResponse{Success: true, Message: "Stream already active"}, nil
+}
+
+func (s *MarketDataServer) UnsubscribeSymbol(ctx context.Context, req *pb.UnsubscribeRequest) (*pb.UnsubscribeResponse, error) {
+	removed := exchange.SubManager.Unsubscribe(req.Symbol)
+
+	if removed {
+		slog.Info("gRPC triggered dynamic unsubscription", "symbol", req.Symbol)
+		if s.metrics != nil {
+			s.metrics.ActiveSubscriptions.Add(ctx, -1)
+		}
+		return &pb.UnsubscribeResponse{Success: true, Message: "Stopped streaming " + req.Symbol}, nil
+	}
+
+	return &pb.UnsubscribeResponse{Success: true, Message: "Stream was not active"}, nil
+}
+
+func StartServer(port string, c *cache.MarketCache, m *telemetry.IngestorMetrics) *grpc.Server {
 	lis, err := net.Listen("tcp", port)
 	if err != nil {
-		log.Fatalf("[FATAL] Failed to listen on gRPC port: %v", err)
+		slog.Error("Failed to listen on gRPC port", "port", port, "error", err)
+		panic(err)
 	}
 
 	grpcServer := grpc.NewServer()
-	pb.RegisterMarketDataServiceServer(grpcServer, NewMarketDataServer(c))
+	pb.RegisterMarketDataServiceServer(grpcServer, NewMarketDataServer(c, m))
 
-	// Run in a goroutine so it doesn't block the caller (main.go)
 	go func() {
-		log.Printf("[INFO] gRPC MarketGateway listening on %s", port)
+		slog.Info("gRPC MarketGateway listening", "port", port)
 		if err := grpcServer.Serve(lis); err != nil {
-			// Serve() returns an error if stopped, ignore if it's the expected shutdown
-			log.Printf("[WARN] gRPC Server stopped: %v", err)
+			slog.Warn("gRPC Server stopped", "error", err)
 		}
 	}()
 
-	// Return the instance so main.go can call GracefulStop() later
 	return grpcServer
 }

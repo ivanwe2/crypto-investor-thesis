@@ -89,7 +89,7 @@ public class AiSignalListener(
                             using var scope = serviceProvider.CreateScope();
                             var notifier = scope.ServiceProvider.GetRequiredService<ITradeNotifier>();
                             
-                            await notifier.NotifyAiSignalAsync(signal.Symbol, signal.Signal, signal.Confidence, signal.Reason);
+                            await notifier.NotifyAiSignalAsync(signal.Symbol, signal.Signal, signal.Confidence, signal.Reason, signal.Side ?? "", signal.Timestamp ?? "");
                         }
                     }
                     catch (Exception ex)

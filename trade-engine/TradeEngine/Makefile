@@ -1,6 +1,6 @@
-PROJECT = TradeEngine.Api/TradeEngine.Api.csproj
-INFRA_PROJECT = TradeEngine.Infrastructure/TradeEngine.Infrastructure.csproj
-STARTUP_PROJECT = TradeEngine.Api/TradeEngine.Api.csproj
+PROJECT = src/TradeEngine.Api/TradeEngine.Api.csproj
+INFRA_PROJECT = src/TradeEngine.Infrastructure/TradeEngine.Infrastructure.csproj
+STARTUP_PROJECT = src/TradeEngine.Api/TradeEngine.Api.csproj
 MIGRATIONS_DIR = Persistence/Migrations
 APP_NAME = trade-engine
 

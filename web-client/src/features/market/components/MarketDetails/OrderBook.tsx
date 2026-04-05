@@ -1,15 +1,23 @@
-import { Card, CardHeader, Spinner, tokens, Text, makeStyles, shorthands } from "@fluentui/react-components";
+import { Card, Spinner, Text, makeStyles, shorthands } from "@fluentui/react-components";
 import { useEffect, useState, useMemo } from "react";
 import { marketService } from "../../services/marketService";
 import type { OrderBookEntryDto } from "../../models/Dtos";
+import { formatPrice } from "../../../../shared/utils/formatPrice";
 
-// ✨ Griffel CSS-in-JS styling for deep pseudo-element control
 const useStyles = makeStyles({
   card: {
-    backgroundColor: tokens.colorNeutralBackground1Hover,
-    height: "400px",
+    backgroundColor: "var(--ct-bg-raised)",
+    ...shorthands.border("1px", "solid", "var(--ct-border)"),
+    ...shorthands.borderRadius("var(--ct-radius-lg)"),
+    height: "420px",
     display: "flex",
     flexDirection: "column",
+    ...shorthands.overflow("hidden"),
+    animation: "ct-fade-in 0.4s ease-out both",
+  },
+  header: {
+    ...shorthands.padding("16px"),
+    ...shorthands.borderBottom("1px", "solid", "var(--ct-border)"),
   },
   centerState: {
     display: "flex",
@@ -20,47 +28,52 @@ const useStyles = makeStyles({
   columnHeaders: {
     display: "flex",
     justifyContent: "space-between",
-    ...shorthands.padding("0", "8px"),
-    color: tokens.colorNeutralForeground3,
-    fontSize: "12px",
-    marginTop: "8px",
+    ...shorthands.padding("8px", "12px"),
+    fontFamily: "var(--ct-font-mono)",
+    fontSize: "10px",
+    fontWeight: "600",
+    letterSpacing: "0.08em",
+    textTransform: "uppercase",
+    color: "var(--ct-text-muted)",
   },
   scrollArea: {
     display: "flex",
     flexDirection: "column",
-    ...shorthands.gap("2px"),
-    marginTop: "4px",
-    fontFamily: "monospace",
+    ...shorthands.gap("1px"),
+    fontFamily: "var(--ct-font-mono)",
     flexGrow: 1,
     overflowY: "auto",
     overflowX: "hidden",
-    // ✨ Cross-browser Scrollbar Hiding!
-    scrollbarWidth: "none", // Firefox
-    msOverflowStyle: "none", // IE/Edge
-    "::-webkit-scrollbar": {
-      display: "none", // Chrome/Safari
-    },
+    scrollbarWidth: "none",
   },
   depthRow: {
     position: "relative",
-    ...shorthands.padding("2px", "8px"),
+    ...shorthands.padding("3px", "12px"),
     display: "flex",
     justifyContent: "space-between",
+    fontSize: "12px",
+    transitionProperty: "background-color",
+    transitionDuration: "0.15s",
+    ":hover": {
+      backgroundColor: "rgba(255,255,255,0.03)",
+    },
   },
   spreadDivider: {
     textAlign: "center",
-    ...shorthands.margin("8px", "0"),
+    ...shorthands.margin("4px", "0"),
     ...shorthands.padding("8px", "0"),
-    backgroundColor: tokens.colorNeutralBackground2,
-    fontSize: "16px",
-    fontWeight: "bold",
-    color: tokens.colorBrandForeground1,
-    ...shorthands.borderTop("1px", "solid", tokens.colorNeutralStroke1),
-    ...shorthands.borderBottom("1px", "solid", tokens.colorNeutralStroke1),
-  }
+    backgroundColor: "var(--ct-bg-elevated)",
+    fontSize: "14px",
+    fontWeight: "700",
+    fontFamily: "var(--ct-font-mono)",
+    color: "var(--ct-brand)",
+    ...shorthands.borderTop("1px", "solid", "var(--ct-border)"),
+    ...shorthands.borderBottom("1px", "solid", "var(--ct-border)"),
+    letterSpacing: "-0.02em",
+  },
 });
 
-export const OrderBook = ({ currentPrice, symbol }: { currentPrice: number, symbol: string }) => {
+export const OrderBook = ({ currentPrice, symbol }: { currentPrice: number; symbol: string }) => {
   const styles = useStyles();
   const [asks, setAsks] = useState<OrderBookEntryDto[]>([]);
   const [bids, setBids] = useState<OrderBookEntryDto[]>([]);
@@ -89,16 +102,20 @@ export const OrderBook = ({ currentPrice, symbol }: { currentPrice: number, symb
   const maxSize = useMemo(() => {
     const maxAsk = asks.length > 0 ? Math.max(...asks.map(a => a.size)) : 0;
     const maxBid = bids.length > 0 ? Math.max(...bids.map(b => b.size)) : 0;
-    return Math.max(maxAsk, maxBid, 0.001); 
+    return Math.max(maxAsk, maxBid, 0.001);
   }, [asks, bids]);
 
   return (
     <Card className={styles.card}>
-      <CardHeader header={<Text weight="semibold" size={500}>Order Book Depth</Text>} />
-      
+      <div className={styles.header}>
+        <Text weight="semibold" size={400} style={{ fontFamily: "var(--ct-font-sans)" }}>
+          Order Book
+        </Text>
+      </div>
+
       {isLoading ? (
         <div className={styles.centerState}>
-           <Spinner size="small" label="Loading depth..." />
+          <Spinner size="small" label="Loading depth..." />
         </div>
       ) : (
         <>
@@ -108,7 +125,6 @@ export const OrderBook = ({ currentPrice, symbol }: { currentPrice: number, symb
           </div>
 
           <div className={styles.scrollArea}>
-            {/* ASKS */}
             {asks.map((ask, i) => {
               const depthPercent = (ask.size / maxSize) * 100;
               return (
@@ -116,22 +132,23 @@ export const OrderBook = ({ currentPrice, symbol }: { currentPrice: number, symb
                   <div style={{
                     position: "absolute", right: 0, top: 0, bottom: 0,
                     width: `${depthPercent}%`,
-                    backgroundColor: tokens.colorPaletteRedBackground1,
-                    opacity: 0.3,
-                    zIndex: 0
+                    background: "linear-gradient(90deg, transparent, rgba(239,68,68,0.08))",
+                    zIndex: 0,
                   }} />
-                  <span style={{ color: tokens.colorPaletteRedForeground1, zIndex: 1 }}>{ask.price.toFixed(2)}</span>
-                  <span style={{ zIndex: 1, color: tokens.colorNeutralForeground1 }}>{ask.size.toFixed(4)}</span>
+                  <span style={{ color: "var(--ct-bearish)", zIndex: 1, fontWeight: 500 }}>
+                    {formatPrice(ask.price)}
+                  </span>
+                  <span style={{ zIndex: 1, color: "var(--ct-text-secondary)" }}>
+                    {ask.size.toFixed(4)}
+                  </span>
                 </div>
               );
             })}
 
-            {/* SPREAD */}
             <div className={styles.spreadDivider}>
-              ${currentPrice ? currentPrice.toLocaleString() : '---'}
+              ${currentPrice ? formatPrice(currentPrice) : '---'}
             </div>
 
-            {/* BIDS */}
             {bids.map((bid, i) => {
               const depthPercent = (bid.size / maxSize) * 100;
               return (
@@ -139,12 +156,15 @@ export const OrderBook = ({ currentPrice, symbol }: { currentPrice: number, symb
                   <div style={{
                     position: "absolute", right: 0, top: 0, bottom: 0,
                     width: `${depthPercent}%`,
-                    backgroundColor: tokens.colorPaletteGreenBackground1,
-                    opacity: 0.3,
-                    zIndex: 0
+                    background: "linear-gradient(90deg, transparent, rgba(34,197,94,0.08))",
+                    zIndex: 0,
                   }} />
-                  <span style={{ color: tokens.colorPaletteGreenForeground1, zIndex: 1 }}>{bid.price.toFixed(2)}</span>
-                  <span style={{ zIndex: 1, color: tokens.colorNeutralForeground1 }}>{bid.size.toFixed(4)}</span>
+                  <span style={{ color: "var(--ct-bullish)", zIndex: 1, fontWeight: 500 }}>
+                    {formatPrice(bid.price)}
+                  </span>
+                  <span style={{ zIndex: 1, color: "var(--ct-text-secondary)" }}>
+                    {bid.size.toFixed(4)}
+                  </span>
                 </div>
               );
             })}

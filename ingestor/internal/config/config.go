@@ -1,6 +1,9 @@
 package config
 
-import "os"
+import (
+	"os"
+	"strings"
+)
 
 type Config struct {
 	RabbitMQURL string
@@ -14,9 +17,14 @@ func Load() *Config {
 		rabbitURL = "amqp://user:password@localhost:5672/"
 	}
 
+	symbols := []string{"btcusdt", "ethusdt", "solusdt"}
+	if envSymbols := os.Getenv("INITIAL_SYMBOLS"); envSymbols != "" {
+		symbols = strings.Split(strings.ToLower(envSymbols), ",")
+	}
+
 	return &Config{
 		RabbitMQURL: rabbitURL,
 		HealthPort:  ":8081",
-		Symbols:     []string{"btcusdt", "ethusdt", "solusdt"},
+		Symbols:     symbols,
 	}
 }
