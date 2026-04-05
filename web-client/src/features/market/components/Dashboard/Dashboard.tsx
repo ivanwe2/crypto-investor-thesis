@@ -2,12 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Card,
-  CardHeader,
   Text,
   Badge,
   Input,
   Button,
-  tokens,
   Spinner,
   makeStyles,
   shorthands,
@@ -16,6 +14,7 @@ import {
   Dismiss16Regular,
   Add16Regular,
   ArrowTrendingLines24Regular,
+  Search20Regular,
 } from "@fluentui/react-icons";
 import { signalRService } from "../../../../shared/services/signalRService";
 import { useMarketStore } from "../../store/marketStore";
@@ -28,37 +27,58 @@ import { formatPrice } from "../../../../shared/utils/formatPrice";
 
 const useStyles = makeStyles({
   dashboardContainer: {
-    ...shorthands.padding("24px"),
     maxWidth: "1400px",
     ...shorthands.margin("0", "auto"),
   },
   header: {
-    ...shorthands.margin("0", "0", "24px", "0"),
+    ...shorthands.margin("0", "0", "28px", "0"),
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-end",
+  },
+  headerTitle: {
+    fontFamily: "var(--ct-font-sans)",
+    letterSpacing: "-0.03em",
   },
   grid: {
     display: "grid",
-    gridTemplateColumns: "2fr 1fr",
+    gridTemplateColumns: "1fr 340px",
     ...shorthands.gap("24px"),
     alignItems: "start",
     "@media (max-width: 1024px)": {
       gridTemplateColumns: "1fr",
     },
   },
+  searchCard: {
+    backgroundColor: "var(--ct-bg-raised)",
+    ...shorthands.border("1px", "solid", "var(--ct-border)"),
+    ...shorthands.borderRadius("var(--ct-radius-lg)"),
+    ...shorthands.padding("16px"),
+  },
+  searchRow: {
+    display: "flex",
+    ...shorthands.gap("8px"),
+    alignItems: "center",
+  },
   tickerGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
-    ...shorthands.gap("16px"),
+    ...shorthands.gap("12px"),
+    marginTop: "20px",
   },
   tickerCard: {
     cursor: "pointer",
-    transitionProperty: "transform, box-shadow",
+    transitionProperty: "transform, box-shadow, border-color",
     transitionDuration: "0.2s",
-    transitionTimingFunction: "ease",
-    ...shorthands.border("1px", "solid", "transparent"),
+    transitionTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)",
+    backgroundColor: "var(--ct-bg-raised)",
+    ...shorthands.border("1px", "solid", "var(--ct-border)"),
+    ...shorthands.borderRadius("var(--ct-radius-lg)"),
+    ...shorthands.padding("16px"),
     ":hover": {
       transform: "translateY(-2px)",
-      boxShadow: tokens.shadow16,
-      ...shorthands.borderColor(tokens.colorBrandStroke1),
+      boxShadow: "var(--ct-shadow-elevated)",
+      ...shorthands.borderColor("var(--ct-border-brand)"),
     },
   },
   tickerCardEmpty: {
@@ -68,13 +88,40 @@ const useStyles = makeStyles({
     justifyContent: "center",
     alignItems: "center",
     ...shorthands.gap("12px"),
+    backgroundColor: "var(--ct-bg-raised)",
+    ...shorthands.border("1px", "solid", "var(--ct-border)"),
+    ...shorthands.borderRadius("var(--ct-radius-lg)"),
+  },
+  tickerHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+  },
+  tickerSymbol: {
+    fontFamily: "var(--ct-font-sans)",
+    fontWeight: "700",
+    letterSpacing: "-0.01em",
+  },
+  tickerPrice: {
+    fontFamily: "var(--ct-font-mono)",
+    fontFeatureSettings: '"tnum" 1',
+    marginTop: "14px",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-end",
   },
   sidebar: {
     display: "flex",
     flexDirection: "column",
-    ...shorthands.gap("24px"),
+    ...shorthands.gap("20px"),
     position: "sticky",
-    top: "24px",
+    top: "0px",
+  },
+  trendBadge: {
+    fontFamily: "var(--ct-font-mono)",
+    fontSize: "11px",
+    fontWeight: "600",
+    letterSpacing: "0.04em",
   },
 });
 
@@ -99,10 +146,7 @@ export const Dashboard = () => {
         try {
           await marketService.trackMarket(symbol);
         } catch (err) {
-          console.warn(
-            `[Network] Failed to sync ${symbol} with Go Gateway`,
-            err,
-          );
+          console.warn(`[Network] Failed to sync ${symbol} with Go Gateway`, err);
         }
         joinedSymbols.current.add(symbol);
       }
@@ -122,10 +166,7 @@ export const Dashboard = () => {
         try {
           await marketService.trackMarket(symbol);
         } catch (err) {
-          console.warn(
-            `[Network] Failed to sync ${symbol} with Go Gateway`,
-            err,
-          );
+          console.warn(`[Network] Failed to sync ${symbol} with Go Gateway`, err);
         }
         joinedSymbols.current.add(symbol);
       }
@@ -148,10 +189,6 @@ export const Dashboard = () => {
     addSymbol(symbolToTrack);
   };
 
-  // Leave the SignalR group when a coin is removed from the watchlist.
-  // NOTE: this does NOT yet close the Binance WebSocket on the Go side —
-  // see the architecture notes in the README for the ref-counting approach
-  // needed to do that safely when multiple users are connected.
   const handleRemoveSymbol = async (symbol: string) => {
     removeSymbol(symbol);
     joinedSymbols.current.delete(symbol);
@@ -161,55 +198,64 @@ export const Dashboard = () => {
   return (
     <div className={styles.dashboardContainer}>
       <header className={styles.header}>
-        <Text size={800} weight="semibold" as="h1">
-          Market Overview
-        </Text>
+        <div>
+          <Text size={900} weight="bold" as="h1" className={styles.headerTitle}>
+            Market Overview
+          </Text>
+          <Text
+            size={300}
+            style={{ color: "var(--ct-text-muted)", marginTop: 4, display: "block" }}
+          >
+            Track real-time prices across your watchlist
+          </Text>
+        </div>
       </header>
 
       <div className={styles.grid}>
-        <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-          <Card
-            style={{ backgroundColor: tokens.colorNeutralBackground1Hover }}
-          >
-            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+        <div>
+          {/* Search + Popular Markets */}
+          <Card className={styles.searchCard}>
+            <div className={styles.searchRow}>
+              <Search20Regular style={{ color: "var(--ct-text-muted)", flexShrink: 0 }} />
               <Input
                 value={newSymbol}
                 onChange={(_, d) => setNewSymbol(d.value)}
                 placeholder="Add any symbol (e.g. ADAUSDT)"
                 style={{ flex: 1 }}
                 onKeyDown={(e) => e.key === "Enter" && handleAddSymbol()}
+                appearance="underline"
               />
               <Button
                 icon={<Add16Regular />}
                 appearance="primary"
                 onClick={handleAddSymbol}
+                size="small"
+                style={{ borderRadius: "var(--ct-radius-sm)" }}
               >
-                Add Coin
+                Add
               </Button>
             </div>
             <PopularMarkets />
           </Card>
 
+          {/* Ticker Cards */}
           <div className={styles.tickerGrid}>
-            {watchList.map((symbol) => {
+            {watchList.map((symbol, idx) => {
               const ticker = tickers[symbol];
 
               if (!ticker) {
                 return (
-                  <Card key={symbol} className={styles.tickerCardEmpty}>
-                    <CardHeader
-                      action={
-                        <Button
-                          icon={<Dismiss16Regular />}
-                          appearance="transparent"
-                          onClick={() => handleRemoveSymbol(symbol)}
-                        />
-                      }
-                    />
-                    <Text size={400} weight="semibold">
+                  <Card key={symbol} className={styles.tickerCardEmpty} style={{ animationDelay: `${idx * 50}ms` }}>
+                    <Text size={400} weight="semibold" style={{ color: "var(--ct-text-secondary)" }}>
                       {symbol}
                     </Text>
                     <Spinner size="tiny" label="Connecting..." />
+                    <Button
+                      icon={<Dismiss16Regular />}
+                      appearance="transparent"
+                      size="small"
+                      onClick={() => handleRemoveSymbol(symbol)}
+                    />
                   </Card>
                 );
               }
@@ -218,78 +264,68 @@ export const Dashboard = () => {
               const isDown = ticker.trend === "down";
 
               return (
-                <Card
+                <div
                   key={symbol}
                   className={styles.tickerCard}
-                  style={{
-                    backgroundColor: tokens.colorNeutralBackground1Hover,
-                  }}
                   onClick={() => navigate(`/market/${symbol}`)}
+                  style={{
+                    animation: `ct-fade-in 0.3s ease-out ${idx * 40}ms both`,
+                  }}
                 >
-                  <CardHeader
-                    header={
-                      <Text weight="semibold" size={500}>
-                        {symbol}
+                  <div className={styles.tickerHeader}>
+                    <div>
+                      <Text weight="bold" size={500} className={styles.tickerSymbol}>
+                        {symbol.replace("USDT", "")}
                       </Text>
-                    }
-                    description={
                       <Text
-                        size={200}
-                        style={{ color: tokens.colorNeutralForeground3 }}
-                      >
-                        {new Date(ticker.timestamp).toLocaleTimeString()}
-                      </Text>
-                    }
-                    action={
-                      <div
+                        size={100}
                         style={{
-                          display: "flex",
-                          gap: "8px",
-                          alignItems: "center",
+                          color: "var(--ct-text-muted)",
+                          display: "block",
+                          fontFamily: "var(--ct-font-mono)",
+                          marginTop: 2,
                         }}
-                        onClick={(e) => e.stopPropagation()}
                       >
-                        <Badge
-                          appearance="tint"
-                          shape="rounded"
-                          color={
-                            isUp ? "success" : isDown ? "danger" : "informative"
-                          }
-                          style={{ minWidth: "85px" }}
-                        >
-                          {isUp ? "▲" : isDown ? "▼" : "−"}{" "}
-                          {ticker.trend.toUpperCase()}
-                        </Badge>
-                        <Button
-                          icon={<Dismiss16Regular />}
-                          appearance="transparent"
-                          onClick={() => handleRemoveSymbol(symbol)}
-                        />
-                      </div>
-                    }
-                  />
+                        {symbol} / USDT
+                      </Text>
+                    </div>
+                    <div style={{ display: "flex", gap: "6px", alignItems: "center" }} onClick={(e) => e.stopPropagation()}>
+                      <Badge
+                        appearance="filled"
+                        shape="rounded"
+                        className={styles.trendBadge}
+                        color={isUp ? "success" : isDown ? "danger" : "informative"}
+                        style={{
+                          boxShadow: isUp
+                            ? "var(--ct-glow-bullish)"
+                            : isDown
+                              ? "var(--ct-glow-bearish)"
+                              : "none",
+                        }}
+                      >
+                        {isUp ? "+" : isDown ? "-" : "~"} {ticker.trend.toUpperCase()}
+                      </Badge>
+                      <Button
+                        icon={<Dismiss16Regular />}
+                        appearance="transparent"
+                        size="small"
+                        onClick={() => handleRemoveSymbol(symbol)}
+                      />
+                    </div>
+                  </div>
 
-                  <div
-                    style={{
-                      marginTop: "16px",
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "flex-end",
-                    }}
-                  >
-                    {/* formatPrice handles everything from BTC ($60k) to PEPE ($0.0000x) */}
+                  <div className={styles.tickerPrice}>
                     <Text
                       size={ticker.price < 0.01 ? 500 : 800}
                       weight="bold"
                       style={{
                         color: isUp
-                          ? tokens.colorPaletteGreenForeground1
+                          ? "var(--ct-bullish)"
                           : isDown
-                            ? tokens.colorPaletteRedForeground1
-                            : tokens.colorNeutralForeground1,
-                        fontFamily: "monospace",
-                        letterSpacing:
-                          ticker.price < 0.01 ? "-0.02em" : undefined,
+                            ? "var(--ct-bearish)"
+                            : "var(--ct-text-primary)",
+                        fontFamily: "var(--ct-font-mono)",
+                        letterSpacing: ticker.price < 0.01 ? "-0.02em" : "-0.03em",
                       }}
                     >
                       ${formatPrice(ticker.price)}
@@ -298,16 +334,31 @@ export const Dashboard = () => {
                     <Button
                       icon={<ArrowTrendingLines24Regular />}
                       appearance="subtle"
+                      size="small"
+                      style={{ color: "var(--ct-brand)" }}
                     >
                       Trade
                     </Button>
                   </div>
-                </Card>
+
+                  <Text
+                    size={100}
+                    style={{
+                      color: "var(--ct-text-muted)",
+                      fontFamily: "var(--ct-font-mono)",
+                      marginTop: 8,
+                      display: "block",
+                    }}
+                  >
+                    {new Date(ticker.timestamp).toLocaleTimeString()}
+                  </Text>
+                </div>
               );
             })}
           </div>
         </div>
 
+        {/* Sidebar */}
         <div className={styles.sidebar}>
           <SentimentWidget />
         </div>

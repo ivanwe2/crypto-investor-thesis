@@ -5,12 +5,10 @@ import * as z from "zod";
 import {
   Button,
   Card,
-  CardHeader,
   Input,
   Radio,
   RadioGroup,
   Spinner,
-  tokens,
   Text,
   makeStyles,
   shorthands,
@@ -56,32 +54,68 @@ const ORDER_TYPE_OPTIONS = [
 ] as const;
 
 const useStyles = makeStyles({
-  card: { backgroundColor: tokens.colorNeutralBackground1Hover },
-  formBody: { display: "flex", flexDirection: "column", ...shorthands.gap("16px") },
-  // 2x2 grid so all four order types always fit without overflow
+  card: {
+    backgroundColor: "var(--ct-bg-raised)",
+    ...shorthands.border("1px", "solid", "var(--ct-border)"),
+    ...shorthands.borderRadius("var(--ct-radius-lg)"),
+    ...shorthands.padding("16px"),
+    animation: "ct-fade-in 0.4s ease-out 0.2s both",
+  },
+  header: {
+    ...shorthands.margin("0", "0", "14px", "0"),
+  },
+  formBody: {
+    display: "flex",
+    flexDirection: "column",
+    ...shorthands.gap("14px"),
+  },
   orderTypeGrid: {
     display: "grid",
     gridTemplateColumns: "1fr 1fr",
-    ...shorthands.gap("6px"),
+    ...shorthands.gap("4px"),
+    backgroundColor: "var(--ct-bg-elevated)",
+    ...shorthands.borderRadius("var(--ct-radius-md)"),
+    ...shorthands.padding("3px"),
   },
   orderTypeBtn: {
     width: "100%",
     justifyContent: "center",
-    fontSize: "13px",
+    fontSize: "12px",
+    fontWeight: "600",
+    fontFamily: "var(--ct-font-sans)",
     ...shorthands.padding("6px", "4px"),
+    ...shorthands.borderRadius("var(--ct-radius-sm)"),
     minWidth: "0",
   },
   infoBox: {
-    ...shorthands.padding("12px"),
-    backgroundColor: tokens.colorNeutralBackground2,
-    ...shorthands.borderRadius("8px"),
+    ...shorthands.padding("10px", "12px"),
+    backgroundColor: "var(--ct-bg-elevated)",
+    ...shorthands.borderRadius("var(--ct-radius-md)"),
+    ...shorthands.border("1px", "solid", "var(--ct-border)"),
     textAlign: "center",
   },
-  priceRow: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" },
+  priceRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: "4px",
+  },
   clickableText: {
-    color: tokens.colorBrandForeground1,
+    color: "var(--ct-brand)",
     cursor: "pointer",
+    fontSize: "12px",
+    fontFamily: "var(--ct-font-mono)",
     ":hover": { textDecorationLine: "underline" },
+  },
+  submitBtn: {
+    height: "42px",
+    fontSize: "14px",
+    fontWeight: "700",
+    fontFamily: "var(--ct-font-sans)",
+    letterSpacing: "0.02em",
+    ...shorthands.borderRadius("var(--ct-radius-md)"),
+    transitionProperty: "all",
+    transitionDuration: "0.2s",
   },
 });
 
@@ -153,9 +187,13 @@ export const OrderForm = ({ symbol, currentPrice }: { symbol: string; currentPri
 
   return (
     <Card className={styles.card}>
-      <CardHeader header={<Text weight="semibold" size={500}>Place Order</Text>} />
+      <div className={styles.header}>
+        <Text weight="semibold" size={400} style={{ fontFamily: "var(--ct-font-sans)" }}>
+          Place Order
+        </Text>
+      </div>
 
-      {/* 2x2 order type selector — all four types always visible, no overflow */}
+      {/* Order Type Selector */}
       <Controller
         name="orderType"
         control={control}
@@ -167,7 +205,7 @@ export const OrderForm = ({ symbol, currentPrice }: { symbol: string; currentPri
                 <Button
                   key={value}
                   className={styles.orderTypeBtn}
-                  appearance={isActive ? "primary" : "secondary"}
+                  appearance={isActive ? "primary" : "subtle"}
                   size="small"
                   onClick={() => field.onChange(value)}
                 >
@@ -193,8 +231,10 @@ export const OrderForm = ({ symbol, currentPrice }: { symbol: string; currentPri
                 value={OrderSide.Buy}
                 label={
                   <Text style={{
-                    color: tokens.colorPaletteGreenForeground1,
+                    color: "var(--ct-bullish)",
                     fontWeight: field.value === OrderSide.Buy ? "bold" : "normal",
+                    fontFamily: "var(--ct-font-sans)",
+                    fontSize: "13px",
                   }}>
                     Buy
                   </Text>
@@ -204,8 +244,10 @@ export const OrderForm = ({ symbol, currentPrice }: { symbol: string; currentPri
                 value={OrderSide.Sell}
                 label={
                   <Text style={{
-                    color: tokens.colorPaletteRedForeground1,
+                    color: "var(--ct-bearish)",
                     fontWeight: field.value === OrderSide.Sell ? "bold" : "normal",
+                    fontFamily: "var(--ct-font-sans)",
+                    fontSize: "13px",
                   }}>
                     Sell
                   </Text>
@@ -225,7 +267,7 @@ export const OrderForm = ({ symbol, currentPrice }: { symbol: string; currentPri
                 validationState={errors.targetPrice ? "error" : "none"}
               >
                 <div className={styles.priceRow}>
-                  <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>Limit Price (USD)</Text>
+                  <Text size={200} style={{ color: "var(--ct-text-secondary)", fontFamily: "var(--ct-font-sans)" }}>Limit Price (USD)</Text>
                   <Text
                     size={200}
                     className={styles.clickableText}
@@ -242,7 +284,7 @@ export const OrderForm = ({ symbol, currentPrice }: { symbol: string; currentPri
                   name={field.name}
                   type="number"
                   step="0.01"
-                  style={{ width: "100%" }}
+                  style={{ width: "100%", fontFamily: "var(--ct-font-mono)" }}
                 />
               </Field>
             )}
@@ -259,7 +301,7 @@ export const OrderForm = ({ symbol, currentPrice }: { symbol: string; currentPri
                 validationState={errors.stopPrice ? "error" : "none"}
               >
                 <div className={styles.priceRow}>
-                  <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>Trigger Stop Price (USD)</Text>
+                  <Text size={200} style={{ color: "var(--ct-text-secondary)", fontFamily: "var(--ct-font-sans)" }}>Trigger Price (USD)</Text>
                   <Text
                     size={200}
                     className={styles.clickableText}
@@ -276,7 +318,7 @@ export const OrderForm = ({ symbol, currentPrice }: { symbol: string; currentPri
                   name={field.name}
                   type="number"
                   step="0.01"
-                  style={{ width: "100%" }}
+                  style={{ width: "100%", fontFamily: "var(--ct-font-mono)" }}
                 />
               </Field>
             )}
@@ -285,12 +327,12 @@ export const OrderForm = ({ symbol, currentPrice }: { symbol: string; currentPri
 
         {watchOrderType === OrderType.Market && (
           <div className={styles.infoBox}>
-            <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-              Executes immediately at the best available market price.
+            <Text size={200} style={{ color: "var(--ct-text-secondary)" }}>
+              Executes immediately at best available price
             </Text>
             <br />
-            <Text size={100} style={{ color: tokens.colorPaletteYellowBackground1 }}>
-              Note: Market Buys temporarily lock +5% collateral to account for potential slippage. Excess funds are instantly refunded upon settlement.
+            <Text size={100} style={{ color: "#FBBF24", fontFamily: "var(--ct-font-mono)" }}>
+              Market Buys lock +5% collateral for slippage
             </Text>
           </div>
         )}
@@ -304,7 +346,7 @@ export const OrderForm = ({ symbol, currentPrice }: { symbol: string; currentPri
               validationState={errors.quantity ? "error" : "none"}
             >
               <div className={styles.priceRow}>
-                <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+                <Text size={200} style={{ color: "var(--ct-text-secondary)", fontFamily: "var(--ct-font-sans)" }}>
                   Quantity ({symbol.replace("USDT", "").replace("USD", "")})
                 </Text>
               </div>
@@ -315,18 +357,18 @@ export const OrderForm = ({ symbol, currentPrice }: { symbol: string; currentPri
                 name={field.name}
                 type="number"
                 step="0.0001"
-                style={{ width: "100%" }}
+                style={{ width: "100%", fontFamily: "var(--ct-font-mono)" }}
               />
             </Field>
           )}
         />
 
         <div className={styles.infoBox}>
-          <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-            {watchOrderType === OrderType.Market ? "Estimated Total Value" : "Total Order Value"}
+          <Text size={200} style={{ color: "var(--ct-text-muted)", fontFamily: "var(--ct-font-sans)" }}>
+            {watchOrderType === OrderType.Market ? "Estimated Total" : "Order Value"}
           </Text>
           <br />
-          <Text weight="bold" size={400}>
+          <Text weight="bold" size={500} style={{ fontFamily: "var(--ct-font-mono)", letterSpacing: "-0.02em" }}>
             ${estimatedTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </Text>
         </div>
@@ -334,16 +376,14 @@ export const OrderForm = ({ symbol, currentPrice }: { symbol: string; currentPri
         <Button
           type="submit"
           disabled={isSubmitting}
+          className={styles.submitBtn}
           style={{
-            backgroundColor: isBuy ? tokens.colorPaletteGreenBackground3 : tokens.colorPaletteRedBackground3,
+            backgroundColor: isBuy ? "var(--ct-bullish)" : "var(--ct-bearish)",
             color: "white",
-            height: "44px",
-            fontSize: "16px",
-            fontWeight: "bold",
-            transition: "all 0.2s ease",
+            boxShadow: isBuy ? "var(--ct-glow-bullish)" : "var(--ct-glow-bearish)",
           }}
         >
-          {isSubmitting ? <Spinner size="tiny" /> : `${watchSide} ${symbol}`}
+          {isSubmitting ? <Spinner size="tiny" /> : `${watchSide} ${symbol.replace("USDT", "")}`}
         </Button>
       </form>
     </Card>

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Text, tokens, makeStyles, shorthands, Spinner } from "@fluentui/react-components";
+import { Text, makeStyles, shorthands, Spinner } from "@fluentui/react-components";
 import { marketService } from "../../services/marketService";
 import { useWatchlistStore } from "../../store/watchlistStore";
 import { signalRService } from "../../../../shared/services/signalRService";
@@ -38,57 +38,65 @@ const POPULAR_COINS: { symbol: string; label: string; category: string }[] = [
 ];
 
 const CATEGORY_COLORS: Record<string, { bg: string; border: string; text: string; hoverBg: string }> = {
-  "Large Cap":   { bg: "rgba(0,120,212,0.08)",  border: "rgba(0,120,212,0.35)",  text: tokens.colorPaletteBlueForeground2,       hoverBg: "rgba(0,120,212,0.18)"  },
-  "Alt L1":      { bg: "rgba(134,93,250,0.08)", border: "rgba(134,93,250,0.35)", text: tokens.colorPalettePurpleForeground2,     hoverBg: "rgba(134,93,250,0.18)" },
-  "DeFi / L2":   { bg: "rgba(0,183,195,0.08)",  border: "rgba(0,183,195,0.35)",  text: tokens.colorPaletteTealForeground2,       hoverBg: "rgba(0,183,195,0.18)"  },
-  "Meme":        { bg: "rgba(255,170,0,0.08)",   border: "rgba(255,170,0,0.35)",   text: tokens.colorPaletteDarkOrangeForeground2, hoverBg: "rgba(255,170,0,0.18)"   },
+  "Large Cap":   { bg: "rgba(59,130,246,0.08)",  border: "rgba(59,130,246,0.25)",  text: "#60A5FA",  hoverBg: "rgba(59,130,246,0.16)" },
+  "Alt L1":      { bg: "rgba(168,85,247,0.08)",  border: "rgba(168,85,247,0.25)",  text: "#C084FC",  hoverBg: "rgba(168,85,247,0.16)" },
+  "DeFi / L2":   { bg: "rgba(16,185,129,0.08)",  border: "rgba(16,185,129,0.25)",  text: "#34D399",  hoverBg: "rgba(16,185,129,0.16)" },
+  "Meme":        { bg: "rgba(251,191,36,0.08)",  border: "rgba(251,191,36,0.25)",  text: "#FBBF24",  hoverBg: "rgba(251,191,36,0.16)" },
 };
 
 const useStyles = makeStyles({
   root: {
     display: "flex",
     flexDirection: "column",
-    ...shorthands.gap("10px"),
-    ...shorthands.padding("12px", "0", "0", "0"),
-    ...shorthands.borderTop("1px", "solid", tokens.colorNeutralStroke2),
-    marginTop: "4px",
+    ...shorthands.gap("8px"),
+    ...shorthands.padding("14px", "0", "0", "0"),
+    ...shorthands.borderTop("1px", "solid", "var(--ct-border)"),
+    marginTop: "8px",
+  },
+  sectionLabel: {
+    fontSize: "10px",
+    fontFamily: "var(--ct-font-mono)",
+    letterSpacing: "0.08em",
+    textTransform: "uppercase",
+    color: "var(--ct-text-muted)",
   },
   categoryRow: {
     display: "flex",
     alignItems: "center",
     flexWrap: "wrap",
-    ...shorthands.gap("6px"),
+    ...shorthands.gap("5px"),
   },
   categoryLabel: {
     fontSize: "10px",
-    fontFamily: "monospace",
-    letterSpacing: "0.08em",
+    fontFamily: "var(--ct-font-mono)",
+    letterSpacing: "0.06em",
     textTransform: "uppercase",
-    color: tokens.colorNeutralForeground4,
-    minWidth: "64px",
+    color: "var(--ct-text-muted)",
+    minWidth: "60px",
     paddingRight: "4px",
+    fontWeight: "500",
   },
   chip: {
     display: "inline-flex",
     alignItems: "center",
-    ...shorthands.gap("4px"),
-    ...shorthands.padding("3px", "10px"),
-    ...shorthands.borderRadius("4px"),
+    ...shorthands.gap("3px"),
+    ...shorthands.padding("3px", "9px"),
+    ...shorthands.borderRadius("var(--ct-radius-sm)"),
     ...shorthands.border("1px", "solid", "transparent"),
-    fontSize: "12px",
-    fontFamily: "monospace",
+    fontSize: "11.5px",
+    fontFamily: "var(--ct-font-mono)",
     fontWeight: "600",
-    letterSpacing: "0.04em",
+    letterSpacing: "0.03em",
     cursor: "pointer",
     userSelect: "none",
     transitionProperty: "background-color, border-color, transform, opacity",
     transitionDuration: "0.15s",
-    transitionTimingFunction: "ease",
+    transitionTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)",
     lineHeight: "1.6",
     ":active": { transform: "scale(0.95)" },
   },
   addedChip: {
-    opacity: "0.35",
+    opacity: "0.3",
     cursor: "default",
     ":active": { transform: "none" },
   },
@@ -121,7 +129,7 @@ export const PopularMarkets = () => {
 
   return (
     <div className={styles.root}>
-      <Text size={100} style={{ color: tokens.colorNeutralForeground4, fontFamily: "monospace", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+      <Text className={styles.sectionLabel}>
         Quick-add popular markets
       </Text>
 
@@ -142,8 +150,8 @@ export const PopularMarkets = () => {
                   className={`${styles.chip}${isAdded ? ` ${styles.addedChip}` : ""}`}
                   style={{
                     backgroundColor: isAdded ? "transparent" : colors.bg,
-                    borderColor: isAdded ? tokens.colorNeutralStroke1 : colors.border,
-                    color: isAdded ? tokens.colorNeutralForeground4 : colors.text,
+                    borderColor: isAdded ? "var(--ct-border)" : colors.border,
+                    color: isAdded ? "var(--ct-text-muted)" : colors.text,
                   }}
                   onClick={() => handleClick(symbol)}
                   onMouseEnter={(e) => {
@@ -156,7 +164,7 @@ export const PopularMarkets = () => {
                 >
                   {isLoading ? <Spinner size="extra-tiny" /> : null}
                   {label}
-                  {isAdded ? null : <span style={{ opacity: 0.6, fontSize: "10px" }}>+</span>}
+                  {isAdded ? null : <span style={{ opacity: 0.5, fontSize: "9px" }}>+</span>}
                 </span>
               );
             })}
