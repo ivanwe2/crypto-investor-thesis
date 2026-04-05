@@ -3,7 +3,7 @@ import logging
 import os
 import pika
 import time
-from opentelemetry import trace
+from opentelemetry import trace, metrics
 from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 from app.services.analyzer import analyzer
 
@@ -11,6 +11,10 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 logger = logging.getLogger("AI_Rabbit_Worker")
 
 tracer = trace.get_tracer(__name__)
+meter = metrics.get_meter(__name__)
+analyses_counter = meter.create_counter("ai_analyst.analyses_performed", description="Total analyses performed")
+signal_counter = meter.create_counter("ai_analyst.signal_distribution", description="Distribution of AI signals by type")
+inference_histogram = meter.create_histogram("ai_analyst.inference_duration_ms", unit="ms", description="FinBERT inference duration")
 
 class AIRabbitWorker:
     def __init__(self, amqp_url: str):
@@ -44,25 +48,42 @@ class AIRabbitWorker:
         quantity = float(trade_data.get("Quantity", 0))
         price = float(trade_data.get("Price", 0))
         total_value = quantity * price
+        base_asset = symbol.replace("USDT", "")
 
-        # ✨ Create a financial ticker "tape" statement for FinBERT
-        if total_value > 50000:
+        # ✨ Create a financial ticker "tape" statement for FinBERT — tiered by trade size
+        if total_value > 100000:
             if side == "BUY":
-                headline = f"Strong bullish momentum: Heavy accumulation and large block buy of {symbol} executed at premium."
+                headline = f"Institutional accumulation: Whale buys {quantity:.4f} {base_asset} worth ${total_value:,.0f} — strong conviction signal."
             else:
-                headline = f"Severe sell-off warning: Massive liquidation block of {symbol} dumped on the market."
+                headline = f"Whale distribution alert: {quantity:.4f} {base_asset} dumped for ${total_value:,.0f} — bearish pressure mounting."
+        elif total_value > 10000:
+            if side == "BUY":
+                headline = f"Significant {base_asset} accumulation: {quantity:.4f} units acquired at ${price:,.2f} with notable volume."
+            else:
+                headline = f"{base_asset} sell-off: {quantity:.4f} units liquidated at ${price:,.2f}, increasing supply pressure."
+        elif total_value > 1000:
+            if side == "BUY":
+                headline = f"Retail buy interest in {base_asset}: order executed at ${price:,.2f}."
+            else:
+                headline = f"Retail {base_asset} selling at ${price:,.2f}, modest distribution activity."
         else:
-            headline = f"Standard market execution: {side} order for {symbol} cleared at ${price:,.2f}."
+            headline = f"Minor {side.lower()} activity: {base_asset} micro-trade at ${price:,.2f}."
 
         try:
-            # Run the FinBERT inference
+            start = time.perf_counter()
             ai_response = analyzer.predict(headline)
-            
+            duration_ms = (time.perf_counter() - start) * 1000
+
+            inference_histogram.record(duration_ms, {"symbol": symbol})
+            analyses_counter.add(1, {"symbol": symbol})
+            signal_counter.add(1, {"signal": ai_response.label})
+
             return {
                 "Symbol": symbol,
                 "Signal": ai_response.label,
                 "Confidence": ai_response.score,
                 "Reason": headline,
+                "Side": side,
                 "Timestamp": trade_data.get("Timestamp")
             }
         except Exception as e:
@@ -72,6 +93,7 @@ class AIRabbitWorker:
                 "Signal": "NEUTRAL",
                 "Confidence": 0.0,
                 "Reason": "AI Analysis Failed",
+                "Side": side,
                 "Timestamp": trade_data.get("Timestamp")
             }
 

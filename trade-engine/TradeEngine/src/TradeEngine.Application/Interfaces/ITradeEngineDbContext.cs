@@ -5,10 +5,11 @@ namespace TradeEngine.Application.Interfaces;
 
 public interface ITradeEngineDbContext
 {
-    DbSet<Order> Orders { get; }
-    DbSet<Wallet> Wallets { get; }
-    DbSet<User> Users { set; }
-    DbSet<TradeOutboxMessage> TradeOutboxMessages { set; }
+    DbSet<User> Users { get; set; }
+    DbSet<Order> Orders { get; set; }
+    DbSet<Wallet> Wallets { get; set; }
+    DbSet<AssetBalance> AssetBalances { get; set; }
+    DbSet<TradeOutboxMessage> TradeOutboxMessages { get; set; }
     
     Task<int> SaveChangesAsync(CancellationToken cancellationToken);
 }

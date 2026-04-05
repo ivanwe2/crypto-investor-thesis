@@ -13,6 +13,8 @@ public class RedisReadModelService : IRedisReadModelService
     private readonly Counter<int> _cacheHitCounter;
     private readonly Counter<int> _cacheMissCounter;
 
+    private readonly TimeSpan _defaultCacheTtl = TimeSpan.FromSeconds(60);
+
     public RedisReadModelService(IConnectionMultiplexer redis, IMeterFactory meterFactory)
     {
         _redisDb = redis.GetDatabase();
@@ -45,7 +47,7 @@ public class RedisReadModelService : IRedisReadModelService
         var key = GetPortfolioKey(userId);
         var jsonData = JsonSerializer.Serialize(portfolio);
         
-        await _redisDb.StringSetAsync(key, jsonData);
+        await _redisDb.StringSetAsync(key, jsonData, _defaultCacheTtl);
     }
 
     public async Task<List<OpenOrderDto>?> GetOpenOrdersAsync(Guid userId, CancellationToken ct = default)
@@ -67,7 +69,7 @@ public class RedisReadModelService : IRedisReadModelService
     {
         var key = GetOrdersKey(userId);
         var jsonData = JsonSerializer.Serialize(orders);
-        await _redisDb.StringSetAsync(key, jsonData);
+        await _redisDb.StringSetAsync(key, jsonData, _defaultCacheTtl);
     }
 
     public async Task AddOpenOrderAsync(Guid userId, OpenOrderDto order, CancellationToken ct = default)
@@ -82,7 +84,7 @@ public class RedisReadModelService : IRedisReadModelService
         orders.Add(order);
 
         var jsonData = JsonSerializer.Serialize(orders);
-        await _redisDb.StringSetAsync(key, jsonData);
+        await _redisDb.StringSetAsync(key, jsonData, _defaultCacheTtl);
     }
 
     public async Task RemoveOpenOrderAsync(Guid userId, Guid orderId, CancellationToken ct = default)
@@ -102,7 +104,7 @@ public class RedisReadModelService : IRedisReadModelService
         if (orders.Count != initialCount)
         {
             var jsonData = JsonSerializer.Serialize(orders);
-            await _redisDb.StringSetAsync(key, jsonData);
+            await _redisDb.StringSetAsync(key, jsonData, _defaultCacheTtl);
         }
     }
     

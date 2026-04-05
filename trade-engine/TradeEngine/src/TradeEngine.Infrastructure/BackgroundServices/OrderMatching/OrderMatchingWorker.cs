@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
-using Grpc.Core;
-using Marketgateway.V1;
+using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -9,7 +8,9 @@ using TradeEngine.Application.Interfaces;
 using TradeEngine.Domain.Entities;
 using TradeEngine.Domain.Enums;
 using TradeEngine.Infrastructure.Persistence;
+using TradeEngine.Infrastructure.Services.Orders;
 using TradeEngine.Infrastructure.Services.TradeSettlement;
+using TradeEngine.Infrastructure.Telemetry;
 
 namespace TradeEngine.Infrastructure.BackgroundServices.OrderMatching;
 
@@ -17,18 +18,21 @@ public class OrderMatchingWorker(
     IServiceScopeFactory scopeFactory,
     SettlementQueue settlementQueue,
     IOrderIngressQueue ingressQueue,
+    IMarketEventBus marketEventBus,
+    DormantOrderTracker dormantOrderTracker,
+    TradingMetrics tradingMetrics,
     ILogger<OrderMatchingWorker> logger) : BackgroundService
 {
-    private readonly ConcurrentDictionary<string, Dictionary<Guid, Order>> _localOrderBook = new();
+    private readonly ConcurrentDictionary<string, ConcurrentDictionary<Guid, Order>> _localOrderBook = new();
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        logger.LogInformation("🚀 Ultimate HFT Event-Driven Order Matcher started (O(1) Optimized).");
+        logger.LogInformation("🚀 Ultimate HFT Event-Driven Order Matcher started (Lock-Free O(1) Optimized).");
 
         await LoadInitialOrdersAsync(stoppingToken);
 
         var ingressTask = ListenForNewOrdersAsync(stoppingToken);
-        var matchTask = StreamAndMatchAsync(stoppingToken);
+        var matchTask = ProcessMarketTicksAsync(stoppingToken);
 
         await Task.WhenAll(ingressTask, matchTask);
     }
@@ -43,118 +47,108 @@ public class OrderMatchingWorker(
             .AsNoTracking()
             .ToListAsync(stoppingToken);
 
-        var grouped = pendingOrders
-            .GroupBy(o => o.Symbol)
-            .ToDictionary(g => g.Key, g => g.ToDictionary(o => o.Id, o => o));
-        
-        foreach (var kvp in grouped)
+        foreach (var order in pendingOrders)
         {
-            _localOrderBook.TryAdd(kvp.Key, kvp.Value);
+            if (order.Type == OrderType.StopLoss || order.Type == OrderType.TakeProfit)
+            {
+                dormantOrderTracker.Register(order);
+            }
+            else
+            {
+                var symbolBook = _localOrderBook.GetOrAdd(order.Symbol, _ => new ConcurrentDictionary<Guid, Order>());
+                symbolBook.TryAdd(order.Id, order);
+            }
         }
         
-        logger.LogInformation("📦 Loaded {Count} pending orders from database into RAM.", pendingOrders.Count);
+        logger.LogInformation("📦 Loaded {Count} pending orders from database into Lock-Free RAM.", pendingOrders.Count);
     }
 
     private async Task ListenForNewOrdersAsync(CancellationToken stoppingToken)
     {
         await foreach (var newOrder in ingressQueue.Reader.ReadAllAsync(stoppingToken))
         {
-            _localOrderBook.AddOrUpdate(
-                newOrder.Symbol,
-                new Dictionary<Guid, Order> { [newOrder.Id] = newOrder }, 
-                (key, existingDict) => 
-                {
-                    lock (existingDict) 
-                    {
-                        existingDict[newOrder.Id] = newOrder; 
-                    }
-                    return existingDict;
-                }
-            );
-            
-            logger.LogDebug("📥 Ingressed new Order {Id} into memory instantly.", newOrder.Id);
+            if (newOrder.Type == OrderType.StopLoss || newOrder.Type == OrderType.TakeProfit)
+            {
+                dormantOrderTracker.Register(newOrder);
+                logger.LogDebug("📥 Ingressed Dormant Order {Id} ({Type}) into tracking engine.", newOrder.Id, newOrder.Type);
+            }
+            else
+            {
+                var symbolBook = _localOrderBook.GetOrAdd(newOrder.Symbol, _ => new ConcurrentDictionary<Guid, Order>());
+                symbolBook.TryAdd(newOrder.Id, newOrder);
+                logger.LogDebug("📥 Ingressed Active Order {Id} into memory instantly.", newOrder.Id);
+            }
         }
     }
 
-    private async Task StreamAndMatchAsync(CancellationToken stoppingToken)
+    private async Task ProcessMarketTicksAsync(CancellationToken stoppingToken)
     {
-        while (!stoppingToken.IsCancellationRequested)
+        logger.LogInformation("📡 Subscribed to internal MarketEventBus. Network gRPC overhead eradicated.");
+        
+        await foreach (var tick in marketEventBus.Reader.ReadAllAsync(stoppingToken))
         {
-            try
+            var sw = Stopwatch.StartNew();
+            decimal currentPrice = tick.Price;
+            string symbol = tick.Symbol;
+
+            var triggeredOrders = dormantOrderTracker.EvaluateTriggers(symbol, currentPrice);
+            
+            foreach (var triggered in triggeredOrders)
             {
-                using var scope = scopeFactory.CreateScope();
-                var grpcClient = scope.ServiceProvider.GetRequiredService<MarketDataService.MarketDataServiceClient>();
+                decimal volatilityFactor = Math.Max(tick.Volatility ?? decimal.Zero, decimal.One);
+                decimal slippageBps = (triggered.Quantity / 100m) * volatilityFactor * 0.0001m;
+                slippageBps = Math.Min(slippageBps, 0.05m);
 
-                var request = new StreamRequest(); 
-                request.Symbols.AddRange(["BTCUSDT", "ETHUSDT", "SOLUSDT", "ADAUSDT"]);
+                decimal executionPrice = triggered.Side == OrderSide.Buy 
+                    ? currentPrice * (1 + slippageBps) 
+                    : currentPrice * (1 - slippageBps);
 
-                logger.LogInformation("📡 Opening continuous gRPC stream to Market Gateway...");
-                using var call = grpcClient.StreamMarketData(request, cancellationToken: stoppingToken);
+                logger.LogInformation("🚨 CEP Triggered: {Type} {Id} converted to Market Order. Settled at ${Price}", triggered.Type, triggered.Id, executionPrice);
+                settlementQueue.Writer.TryWrite(new TradeSettlementCommand(triggered.Id, executionPrice));
+                tradingMetrics.RecordOrderMatched();
+            }
 
-                await foreach (var snapshot in call.ResponseStream.ReadAllAsync(stoppingToken))
+            // 2. Standard Limit Book Evaluation
+            if (!_localOrderBook.TryGetValue(symbol, out var pendingOrders) || pendingOrders.IsEmpty)
+            {
+                continue;
+            }
+
+            var matches = pendingOrders.Values.Where(o => 
+                o.Type == OrderType.Market ||
+                (o.Side == OrderSide.Buy && currentPrice <= o.TargetPrice) ||
+                (o.Side == OrderSide.Sell && currentPrice >= o.TargetPrice)
+            ).ToList();
+
+            foreach (var match in matches)
+            {
+                pendingOrders.TryRemove(match.Id, out _); 
+            }
+
+            foreach (var match in matches)
+            {
+                decimal executionPrice = currentPrice;
+
+                if (match.Type == OrderType.Market)
                 {
-                    decimal currentPrice = (decimal)snapshot.Price;
-                    string symbol = snapshot.Symbol;
+                    decimal volatilityFactor = Math.Max(tick.Volatility ?? decimal.Zero, decimal.One);
+                    decimal slippageBps = (match.Quantity / 100m) * volatilityFactor * 0.0001m;
+                    slippageBps = Math.Min(slippageBps, 0.05m);
 
-                    if (!_localOrderBook.TryGetValue(symbol, out var pendingOrders) || pendingOrders.Count == 0)
-                    {
-                        continue;
-                    }
+                    executionPrice = match.Side == OrderSide.Buy 
+                        ? currentPrice * (1 + slippageBps) 
+                        : currentPrice * (1 - slippageBps);
 
-                    List<Order> matches;
-                    
-                    lock (pendingOrders)
-                    {
-                        // ✨ Phase v0.85: Market Orders match instantly. Limit orders wait for price overlap.
-                        matches = pendingOrders.Values.Where(o => 
-                            o.Type == OrderType.Market ||
-                            (o.Side == OrderSide.Buy && currentPrice <= o.TargetPrice) ||
-                            (o.Side == OrderSide.Sell && currentPrice >= o.TargetPrice)
-                        ).ToList();
-
-                        foreach (var match in matches)
-                        {
-                            pendingOrders.Remove(match.Id); 
-                        }
-                    }
-
-                    foreach (var match in matches)
-                    {
-                        decimal executionPrice = currentPrice;
-
-                        if (match.Type == OrderType.Market)
-                        {
-                            decimal volatilityFactor = (decimal)Math.Max(snapshot.Volatility, 1.0);
-                            
-                            decimal slippageBps = (match.Quantity / 100m) * volatilityFactor * 0.0001m;
-                            
-                            slippageBps = Math.Min(slippageBps, 0.05m);
-
-                            executionPrice = match.Side == OrderSide.Buy 
-                                ? currentPrice * (1 + slippageBps) 
-                                : currentPrice * (1 - slippageBps);
-
-                            logger.LogInformation("📉 VWAP Execution: Market {Side} of {Qty} {Symbol}. Top-of-book: ${Top}, VWAP Settled: ${Exec}", 
-                                match.Side, match.Quantity, match.Symbol, currentPrice, executionPrice);
-                        }
-                        else 
-                        {
-                            logger.LogInformation("🎯 Event-Driven Match! Queuing Limit Order {Id} for Settlement at ${Price}.", match.Id, currentPrice);
-                        }
-
-                        settlementQueue.Writer.TryWrite(new TradeSettlementCommand(match.Id, executionPrice));
-                    }
+                    logger.LogInformation("📉 VWAP Execution: Market {Side} of {Qty} {Symbol}. Top-of-book: ${Top}, VWAP Settled: ${Exec}", 
+                        match.Side, match.Quantity, match.Symbol, currentPrice, executionPrice);
                 }
+
+                settlementQueue.Writer.TryWrite(new TradeSettlementCommand(match.Id, executionPrice));
+                tradingMetrics.RecordOrderMatched();
             }
-            catch (RpcException ex) when (ex.StatusCode == StatusCode.Cancelled)
-            {
-                logger.LogInformation("gRPC Stream cancelled.");
-            }
-            catch (Exception ex)
-            {
-                logger.LogWarning("gRPC Stream disconnected. Retrying in 3 seconds... Error: {Message}", ex.Message);
-                await Task.Delay(3000, stoppingToken);
-            }
+
+            sw.Stop();
+            tradingMetrics.RecordMatchingLoopDuration(sw.Elapsed.TotalMilliseconds);
         }
     }
 }

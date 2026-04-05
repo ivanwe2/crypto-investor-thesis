@@ -77,6 +77,10 @@ namespace TradeEngine.Infrastructure.Persistence.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<decimal?>("StopPrice")
+                        .HasPrecision(18, 8)
+                        .HasColumnType("numeric(18,8)");
+
                     b.Property<string>("Symbol")
                         .IsRequired()
                         .HasMaxLength(20)

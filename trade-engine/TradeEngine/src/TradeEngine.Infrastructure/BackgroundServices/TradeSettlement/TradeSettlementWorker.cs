@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -8,13 +9,17 @@ using TradeEngine.Application.Interfaces;
 using TradeEngine.Domain.Entities;
 using TradeEngine.Domain.Enums;
 using TradeEngine.Infrastructure.Persistence;
+using TradeEngine.Infrastructure.Services.Outbox;
 using TradeEngine.Infrastructure.Services.TradeSettlement;
+using TradeEngine.Infrastructure.Telemetry;
 
 namespace TradeEngine.Infrastructure.BackgroundServices.TradeSettlement;
 
 public class TradeSettlementWorker(
     IServiceScopeFactory scopeFactory,
     SettlementQueue settlementQueue,
+    OutboxTrigger outboxTrigger,
+    TradingMetrics tradingMetrics,
     ILogger<TradeSettlementWorker> logger) : BackgroundService
 {
      protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -23,6 +28,7 @@ public class TradeSettlementWorker(
 
         await foreach (var command in settlementQueue.Reader.ReadAllAsync(stoppingToken))
         {
+            var sw = Stopwatch.StartNew();
             try
             {
                 using var scope = scopeFactory.CreateScope();
@@ -115,12 +121,14 @@ public class TradeSettlementWorker(
                     await transaction.CommitAsync(stoppingToken);
 
                     logger.LogInformation("✅ Settlement Complete: Order {Id} Filled at ${Price}", order.Id, command.ExecutionPrice);
+
+                    outboxTrigger.Trigger();
                     
                     try 
                     {
                         await redisService.RemoveOpenOrderAsync(order.UserId, order.Id, stoppingToken);
                         
-                        var balances = wallet.Balances.Select(b => new AssetBalanceDto(b.Currency, b.Amount)).ToList();
+                        var balances = wallet.Balances.Select(b => new AssetBalanceDto(b.Currency, b.Amount, 0, null)).ToList();
                         var walletResponse = new WalletResponse(wallet.Id, balances);
                         await redisService.UpdateUserPortfolioAsync(order.UserId, walletResponse, stoppingToken);
                     }
@@ -129,12 +137,17 @@ public class TradeSettlementWorker(
                         logger.LogWarning(ex, "⚠️ Synchronous Redis update failed. UI may experience a slight delay.");
                     }
 
-                    _ = tradeNotifier.NotifyOrderFilledAsync(order.UserId, order.Symbol, order.Quantity, command.ExecutionPrice);
+                    _ = tradeNotifier.NotifyOrderFilledAsync(order.UserId, order.Symbol, order.Quantity, command.ExecutionPrice, order.Side);
                 });
             }
             catch (Exception ex)
             {
                 logger.LogError("❌ Critical Settlement Error for Order {Id}: {Message}", command.OrderId, ex.Message);
+            }
+            finally
+            {
+                sw.Stop();
+                tradingMetrics.RecordSettlementDuration(sw.Elapsed.TotalMilliseconds);
             }
         }
     }

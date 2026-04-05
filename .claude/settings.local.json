@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs grep:*)",
+      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
+      "Bash(grep \"\\\\.cs$\")",
+      "Bash(find /d/diplomna-bachelor/crypto-investor-thesis/trade-engine -name \"*.cs\" -type f ! -path \"*/obj/*\" ! -path \"*/.NETCoreApp*\" -exec grep -l \"OrderMatchingWorker\\\\|ProcessMarketTicks\\\\|SubscribeSymbol.*grpc\" {} \\\\;)",
+      "Bash(go list:*)",
+      "Bash(go doc:*)",
+      "Bash(go mod:*)",
+      "Bash(go build:*)",
+      "Bash(go vet:*)",
+      "Bash(dotnet build:*)"
+    ]
+  }
+}

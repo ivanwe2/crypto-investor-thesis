@@ -10,4 +10,5 @@ public record PlaceOrderCommand(
     OrderSide Side,
     OrderType Type,
     decimal Quantity,
-    decimal TargetPrice) : IRequest<Result<OrderResponse>>;
+    decimal TargetPrice,
+    decimal? StopPrice = null) : IRequest<Result<OrderResponse>>;

@@ -1,12 +1,185 @@
+/* ═══════════════════════════════════════════════════════
+   CRYPTO THESIS — Global Design System
+   Aesthetic: Midnight Emerald Terminal
+   ═══════════════════════════════════════════════════════ */
+
+/* ── Typography ── */
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+/* ── Design Tokens (CSS Custom Properties) ── */
+:root {
+  /* Brand */
+  --ct-brand: #10B981;
+  --ct-brand-light: #34D399;
+  --ct-brand-dim: rgba(16, 185, 129, 0.15);
+  --ct-brand-glow: rgba(16, 185, 129, 0.4);
+
+  /* Trading signals */
+  --ct-bullish: #22C55E;
+  --ct-bearish: #EF4444;
+  --ct-bullish-dim: rgba(34, 197, 94, 0.12);
+  --ct-bearish-dim: rgba(239, 68, 68, 0.12);
+
+  /* Surfaces — dark mode defaults */
+  --ct-bg-deep: #060A13;
+  --ct-bg-base: #0B1120;
+  --ct-bg-raised: #111827;
+  --ct-bg-elevated: #1A2332;
+  --ct-bg-glass: rgba(17, 24, 39, 0.75);
+
+  /* Borders & Strokes */
+  --ct-border: rgba(255, 255, 255, 0.06);
+  --ct-border-hover: rgba(255, 255, 255, 0.12);
+  --ct-border-brand: rgba(16, 185, 129, 0.3);
+
+  /* Text */
+  --ct-text-primary: #F1F5F9;
+  --ct-text-secondary: #94A3B8;
+  --ct-text-muted: #64748B;
+
+  /* Effects */
+  --ct-glow-brand: 0 0 20px rgba(16, 185, 129, 0.15);
+  --ct-glow-bullish: 0 0 12px rgba(34, 197, 94, 0.2);
+  --ct-glow-bearish: 0 0 12px rgba(239, 68, 68, 0.2);
+  --ct-shadow-card: 0 1px 3px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.2);
+  --ct-shadow-elevated: 0 4px 24px rgba(0, 0, 0, 0.4);
+
+  /* Radii */
+  --ct-radius-sm: 6px;
+  --ct-radius-md: 10px;
+  --ct-radius-lg: 14px;
+  --ct-radius-xl: 20px;
+
+  /* Transitions */
+  --ct-transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --ct-transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  --ct-transition-slow: 400ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Typography */
+  --ct-font-sans: 'Sora', system-ui, -apple-system, sans-serif;
+  --ct-font-mono: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', monospace;
+}
+
+/* ── Light Mode Override ── */
+[data-theme="light"] {
+  --ct-bg-deep: #F8FAFC;
+  --ct-bg-base: #FFFFFF;
+  --ct-bg-raised: #F1F5F9;
+  --ct-bg-elevated: #E2E8F0;
+  --ct-bg-glass: rgba(255, 255, 255, 0.8);
+  --ct-border: rgba(0, 0, 0, 0.06);
+  --ct-border-hover: rgba(0, 0, 0, 0.12);
+  --ct-text-primary: #0F172A;
+  --ct-text-secondary: #475569;
+  --ct-text-muted: #94A3B8;
+  --ct-shadow-card: 0 1px 3px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.04);
+  --ct-shadow-elevated: 0 4px 24px rgba(0, 0, 0, 0.08);
+}
+
+/* ── Base Reset ── */
 html, body, #root {
   margin: 0;
   padding: 0;
   width: 100%;
   height: 100vh;
   box-sizing: border-box;
-  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-family: var(--ct-font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 *, *::before, *::after {
   box-sizing: inherit;
+}
+
+/* ── Override FluentUI default font stack ── */
+.fui-FluentProvider {
+  font-family: var(--ct-font-sans) !important;
+}
+
+/* ── Scrollbar Styling ── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+}
+
+/* ── Animations ── */
+@keyframes ct-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes ct-fade-in-right {
+  from { opacity: 0; transform: translateX(12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes ct-scale-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes ct-pulse-brand {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+  50%      { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+}
+
+@keyframes ct-shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes ct-live-dot {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.4; }
+}
+
+/* ── Utility Classes ── */
+.ct-animate-in {
+  animation: ct-fade-in var(--ct-transition-slow) ease-out both;
+}
+
+.ct-mono {
+  font-family: var(--ct-font-mono);
+  font-feature-settings: "tnum" 1, "ss01" 1;
+}
+
+.ct-glass {
+  background: var(--ct-bg-glass);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--ct-border);
+}
+
+.ct-glow-brand {
+  box-shadow: var(--ct-glow-brand);
+}
+
+/* ── Selection ── */
+::selection {
+  background: rgba(16, 185, 129, 0.3);
+  color: #F1F5F9;
+}
+
+/* ── Focus Rings ── */
+:focus-visible {
+  outline: 2px solid var(--ct-brand);
+  outline-offset: 2px;
 }

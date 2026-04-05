@@ -2,25 +2,17 @@ syntax = "proto3";
 
 package marketgateway.v1;
 
-// This tells the Go compiler where to put the generated code
 option go_package = "ingestor/gen/marketgateway/v1";
 
-// The core gRPC service our Go app will serve
 service MarketDataService {
-  // Unary: Gets a single snapshot instantly from the Go RWMutex Cache
   rpc GetMarketSnapshot(SnapshotRequest) returns (MarketSnapshot);
-
-  // Server-streaming: Maintains a persistent open connection (faster than RabbitMQ!)
   rpc StreamMarketData(StreamRequest) returns (stream MarketSnapshot);
-
-  // Unary: AI/Matching engine checks this before allowing a trade
   rpc GetVolatilityScore(VolatilityRequest) returns (VolatilityResponse);
-
-  // Unary: Fetch historical OHLCV data for Candlestick charting
   rpc GetHistoricalKlines(KlinesRequest) returns (KlinesResponse);
-
-  // Unary: Fetch the current order book depth (bids and asks) for visual mapping
   rpc GetOrderBookDepth(OrderBookRequest) returns (OrderBookResponse);
+
+  rpc SubscribeSymbol(SubscribeRequest) returns (SubscribeResponse);
+  rpc UnsubscribeSymbol(UnsubscribeRequest) returns (UnsubscribeResponse);
 }
 
 // --- Requests ---
@@ -29,7 +21,7 @@ message SnapshotRequest {
 }
 
 message StreamRequest {
-  repeated string symbols = 1; // Allows subscribing to multiple coins
+  repeated string symbols = 1; 
 }
 
 message VolatilityRequest {
@@ -38,13 +30,17 @@ message VolatilityRequest {
 
 message KlinesRequest {
   string symbol = 1;
-  string interval = 2; // e.g., "1m", "5m", "1h", "1d"
-  int32 limit = 3;     // Number of data points to return (e.g., 50)
+  string interval = 2; 
+  int32 limit = 3;     
 }
 
 message OrderBookRequest {
   string symbol = 1;
-  int32 limit = 2; // e.g., 10 levels deep
+  int32 limit = 2; 
+}
+
+message SubscribeRequest {
+  string symbol = 1;
 }
 
 // --- Responses ---
@@ -58,7 +54,21 @@ message MarketSnapshot {
 message VolatilityResponse {
   string symbol     = 1;
   double volatility = 2;
-  string regime     = 3; // "LOW", "NORMAL", "HIGH"
+  string regime     = 3; 
+}
+
+message SubscribeResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message UnsubscribeRequest {
+  string symbol = 1;
+}
+
+message UnsubscribeResponse {
+  bool success = 1;
+  string message = 2;
 }
 
 // --- Data Structures ---
@@ -85,5 +95,5 @@ message OrderBookResponse {
   string symbol = 1;
   repeated OrderBookEntry bids = 2;
   repeated OrderBookEntry asks = 3;
-  int64 last_update_id = 4; // To keep sync with streams if needed
+  int64 last_update_id = 4; 
 }

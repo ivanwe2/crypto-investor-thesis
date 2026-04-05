@@ -46,7 +46,7 @@ public class PlaceOrderCommandHandler(
         if (walletResult.IsFailure)
             return Result.Failure<OrderResponse>(walletResult.Error);
 
-        var orderResult = Order.Create(request.UserId, symbol, request.Side, request.Type, request.Quantity, request.TargetPrice);
+        var orderResult = Order.Create(request.UserId, symbol, request.Side, request.Type, request.Quantity, request.TargetPrice, request.StopPrice);
         
         if (orderResult.IsFailure)
             return Result.Failure<OrderResponse>(orderResult.Error);
@@ -66,11 +66,12 @@ public class PlaceOrderCommandHandler(
                 order.Quantity,
                 order.TargetPrice,
                 order.Status.ToString(), 
-                order.CreatedAt);
+                order.CreatedAt,
+                order.StopPrice);
                 
             await redisService.AddOpenOrderAsync(request.UserId, orderDto, cancellationToken);
 
-            var balances = wallet.Balances.Select(b => new AssetBalanceDto(b.Currency, b.Amount)).ToList();
+            var balances = wallet.Balances.Select(b => new AssetBalanceDto(b.Currency, b.Amount, 0, null)).ToList();
             var walletResponse = new WalletResponse(wallet.Id, balances);
             
             await redisService.UpdateUserPortfolioAsync(request.UserId, walletResponse, cancellationToken);

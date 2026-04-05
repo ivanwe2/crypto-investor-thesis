@@ -21,7 +21,8 @@ public class RabbitMqListener(
     ILogger<RabbitMqListener> logger,
     IConfiguration configuration,
     IPriceBroadcaster priceBroadcaster,
-    IMarketStateCache marketStateCache) : BackgroundService
+    IMarketStateCache marketStateCache,
+    IMarketEventBus marketEventBus) : BackgroundService // INJECTED EVENT BUS HERE
 {
     private IConnection? _connection;
     private IChannel? _channel;
@@ -41,7 +42,6 @@ public class RabbitMqListener(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // RETRY LOOP: Keep trying to connect until successful or cancelled
         while (!stoppingToken.IsCancellationRequested)
         {
             try
@@ -54,7 +54,6 @@ public class RabbitMqListener(
                     Password = _password
                 };
                 
-                // Attempt connection
                 _connection = await factory.CreateConnectionAsync(stoppingToken);
                 _channel = await _connection.CreateChannelAsync(cancellationToken: stoppingToken);
 
@@ -87,7 +86,6 @@ public class RabbitMqListener(
                     {
                         if (headers != null && headers.TryGetValue(key, out var value))
                         {
-                            // RabbitMQ serializes header strings as byte arrays
                             if (value is byte[] bytes)
                             {
                                 return [Encoding.UTF8.GetString(bytes)];
@@ -118,7 +116,6 @@ public class RabbitMqListener(
             }
             catch (Exception ex)
             {
-                // Log warning and wait before retrying
                 logger.LogWarning("RabbitMQ not reachable yet. Retrying in 3s... Error: {Message}", ex.Message);
                 try 
                 {
@@ -126,7 +123,6 @@ public class RabbitMqListener(
                 } 
                 catch (OperationCanceledException) 
                 {
-                    // Graceful shutdown
                     return;
                 }
             }
@@ -146,10 +142,10 @@ public class RabbitMqListener(
 
             if (trade is not null && trade.Data.Price > 0)
             {
-                logger.LogDebug("{Symbol} @ ${Price}", trade.Data.Symbol, trade.Data.Price);
+                // Write directly to our fast internal pipeline (Challenge 13 Solved)
+                marketEventBus.Writer.TryWrite(trade.Data);
 
                 await priceBroadcaster.BroadcastPriceAsync(trade.Data);
-
                 marketStateCache.UpdatePrice(trade.Data.Symbol, trade.Data.Price);
             }
             else

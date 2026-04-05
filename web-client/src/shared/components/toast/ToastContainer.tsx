@@ -1,4 +1,4 @@
-import { tokens, makeStyles, shorthands } from '@fluentui/react-components';
+import { makeStyles, shorthands } from '@fluentui/react-components';
 import { useNotificationStore } from '../../../shared/store/notificationStore';
 
 const useStyles = makeStyles({
@@ -8,18 +8,19 @@ const useStyles = makeStyles({
         right: '20px',
         display: 'flex',
         flexDirection: 'column',
-        ...shorthands.gap('10px'),
+        ...shorthands.gap('8px'),
         zIndex: 9999,
     },
     toast: {
-        ...shorthands.padding('15px', '20px'),
-        ...shorthands.borderRadius('8px'),
+        ...shorthands.padding('12px', '18px'),
+        ...shorthands.borderRadius('var(--ct-radius-md)'),
         ...shorthands.border('1px', 'solid'),
-        boxShadow: tokens.shadow16,
+        boxShadow: 'var(--ct-shadow-elevated)',
         cursor: 'pointer',
-        maxWidth: '350px',
-        fontSize: '0.95rem',
+        maxWidth: '360px',
+        fontSize: '13px',
         fontWeight: 600,
+        fontFamily: 'var(--ct-font-sans)',
         transitionProperty: 'all',
         transitionDuration: '0.3s',
         transitionTimingFunction: 'ease-in-out',
@@ -28,10 +29,37 @@ const useStyles = makeStyles({
             to: { opacity: 1, transform: 'translateX(0)' }
         },
         animationDuration: '0.3s',
-        animationTimingFunction: 'ease-out',
-        animationFillMode: 'forwards'
+        animationTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)',
+        animationFillMode: 'forwards',
+        backdropFilter: 'blur(12px)',
     }
 });
+
+const TOAST_STYLES: Record<string, { bg: string; fg: string; border: string; glow?: string }> = {
+    success: {
+        bg: 'rgba(34,197,94,0.12)',
+        fg: '#4ADE80',
+        border: 'rgba(34,197,94,0.25)',
+        glow: '0 4px 16px rgba(34,197,94,0.15)',
+    },
+    error: {
+        bg: 'rgba(239,68,68,0.12)',
+        fg: '#F87171',
+        border: 'rgba(239,68,68,0.25)',
+        glow: '0 4px 16px rgba(239,68,68,0.15)',
+    },
+    info: {
+        bg: 'var(--ct-bg-elevated)',
+        fg: 'var(--ct-text-primary)',
+        border: 'var(--ct-border-hover)',
+    },
+    ai: {
+        bg: 'rgba(168,85,247,0.12)',
+        fg: '#C084FC',
+        border: 'rgba(168,85,247,0.3)',
+        glow: '0 4px 20px rgba(168,85,247,0.2)',
+    },
+};
 
 export const ToastContainer = () => {
     const styles = useStyles();
@@ -42,33 +70,17 @@ export const ToastContainer = () => {
     return (
         <div className={styles.container}>
             {notifications.map((toast) => {
-                let bgColor = tokens.colorNeutralBackground3;
-                let fgColor = tokens.colorNeutralForeground1;
-                let borderColor = tokens.colorNeutralStroke1;
-
-                if (toast.type === 'success') {
-                    bgColor = tokens.colorPaletteGreenBackground1;
-                    fgColor = tokens.colorPaletteGreenForeground1;
-                    borderColor = tokens.colorPaletteGreenBorder2;
-                } else if (toast.type === 'error') {
-                    bgColor = tokens.colorPaletteRedBackground1;
-                    fgColor = tokens.colorPaletteRedForeground1;
-                    borderColor = tokens.colorPaletteRedBorder2;
-                } else if (toast.type === 'ai') {
-                    bgColor = tokens.colorPalettePlumBackground2;
-                    fgColor = tokens.colorPalettePlumForeground2;
-                    borderColor = tokens.colorPalettePlumBorderActive;
-                }
+                const scheme = TOAST_STYLES[toast.type] || TOAST_STYLES.info;
 
                 return (
-                    <div 
-                        key={toast.id} 
+                    <div
+                        key={toast.id}
                         className={styles.toast}
                         style={{
-                            backgroundColor: bgColor,
-                            color: fgColor,
-                            borderColor: borderColor,
-                            boxShadow: toast.type === 'ai' ? `0 4px 15px ${tokens.colorPalettePlumBackground2}` : tokens.shadow16
+                            backgroundColor: scheme.bg,
+                            color: scheme.fg,
+                            borderColor: scheme.border,
+                            boxShadow: scheme.glow || 'var(--ct-shadow-card)',
                         }}
                         onClick={() => removeNotification(toast.id)}
                     >

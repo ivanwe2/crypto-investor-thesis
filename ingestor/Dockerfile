@@ -4,13 +4,19 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-# Build the binary named "ingestor"
-RUN go build -o ingestor cmd/server/main.go
+
+# 1. Output the binary with a safe, unique name ("ingestor-bin")
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o ingestor-bin cmd/server/main.go
 
 # Run Stage
 FROM alpine:latest
 WORKDIR /root/
-COPY --from=builder /app/ingestor .
-# Install certificates so we can talk to Binance (HTTPS)
+
+# 2. Copy the specific binary file and rename it to "ingestor" in the final image
+COPY --from=builder /app/ingestor-bin ./ingestor
+
+# Install certificates
 RUN apk --no-cache add ca-certificates
+
+# 3. Execute the binary
 CMD ["./ingestor"]

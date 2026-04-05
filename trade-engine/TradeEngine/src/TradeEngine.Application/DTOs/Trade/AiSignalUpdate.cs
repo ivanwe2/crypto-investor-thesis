@@ -5,5 +5,6 @@ public record AiSignalUpdate(
     string Signal,
     double Confidence,
     string Reason,
+    string Side,
     string Timestamp
 );
