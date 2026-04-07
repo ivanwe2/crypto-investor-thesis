@@ -99,3 +99,12 @@ func (c *MarketCache) GetOrderBook(symbol string, maxAge time.Duration) (*OrderB
 	}
 	return snap, true
 }
+
+// GetOrderBookStale returns any cached order book for the symbol regardless of age.
+// Used as a fallback when the upstream Binance REST call fails.
+func (c *MarketCache) GetOrderBookStale(symbol string) (*OrderBookSnapshot, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	snap, exists := c.orderBooks[symbol]
+	return snap, exists
+}

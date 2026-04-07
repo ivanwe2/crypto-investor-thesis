@@ -135,6 +135,23 @@ func (s *MarketDataServer) GetOrderBookDepth(ctx context.Context, req *pb.OrderB
 	depthData, err := exchange.FetchOrderBookDepth(ctx, req.Symbol, req.Limit)
 	if err != nil {
 		slog.Error("Failed to fetch order book depth", "symbol", req.Symbol, "error", err)
+		// Degrade gracefully: return a stale snapshot rather than propagating the error
+		if stale, ok := s.cache.GetOrderBookStale(req.Symbol); ok {
+			slog.Warn("Serving stale order book due to Binance REST error", "symbol", req.Symbol)
+			response := &pb.OrderBookResponse{
+				Symbol:       req.Symbol,
+				LastUpdateId: stale.LastUpdateID,
+				Bids:         make([]*pb.OrderBookEntry, 0, len(stale.Bids)),
+				Asks:         make([]*pb.OrderBookEntry, 0, len(stale.Asks)),
+			}
+			for _, b := range stale.Bids {
+				response.Bids = append(response.Bids, &pb.OrderBookEntry{Price: b.Price, Size: b.Size})
+			}
+			for _, a := range stale.Asks {
+				response.Asks = append(response.Asks, &pb.OrderBookEntry{Price: a.Price, Size: a.Size})
+			}
+			return response, nil
+		}
 		return nil, err
 	}
 

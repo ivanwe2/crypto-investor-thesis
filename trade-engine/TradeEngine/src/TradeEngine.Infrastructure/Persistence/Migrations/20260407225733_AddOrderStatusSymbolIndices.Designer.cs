@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using TradeEngine.Infrastructure.Persistence;
@@ -11,9 +12,11 @@ using TradeEngine.Infrastructure.Persistence;
 namespace TradeEngine.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(TradeEngineDbContext))]
-    partial class TradeEngineDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260407225733_AddOrderStatusSymbolIndices")]
+    partial class AddOrderStatusSymbolIndices
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

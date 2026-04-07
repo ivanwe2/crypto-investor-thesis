@@ -49,7 +49,7 @@ public static class ServiceCollectionExtensions
                     maxRetryDelay: TimeSpan.FromSeconds(5),
                     errorCodesToAdd: null);
             });
-        }, poolSize: 1024);
+        }, poolSize: 100); // Aligned to postgres max_connections=200; leave headroom for other clients
 
         var redisConnectionString = configuration.GetConnectionString("Redis") ?? "redis:6379";
         services.AddSingleton<IConnectionMultiplexer>(sp => ConnectionMultiplexer.Connect(redisConnectionString));

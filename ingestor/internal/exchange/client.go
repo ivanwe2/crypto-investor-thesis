@@ -60,6 +60,17 @@ func (sm *SubscriptionManager) Unsubscribe(symbol string) bool {
 	return true
 }
 
+// ActiveSymbols returns a snapshot of all currently subscribed symbols (uppercase).
+func (sm *SubscriptionManager) ActiveSymbols() []string {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	out := make([]string, 0, len(sm.active))
+	for sym := range sm.active {
+		out = append(out, strings.ToUpper(sym))
+	}
+	return out
+}
+
 // Thread-safe pre-warming — adds initial symbols without triggering the dynamic subChan
 func (sm *SubscriptionManager) PreWarm(symbols []string) {
 	sm.mu.Lock()

@@ -104,7 +104,7 @@ public class OrderMatchingWorker(
                     : currentPrice * (1 - slippageBps);
 
                 logger.LogInformation("🚨 CEP Triggered: {Type} {Id} converted to Market Order. Settled at ${Price}", triggered.Type, triggered.Id, executionPrice);
-                settlementQueue.Writer.TryWrite(new TradeSettlementCommand(triggered.Id, executionPrice));
+                settlementQueue.Write(new TradeSettlementCommand(triggered.Id, executionPrice, triggered.Symbol));
                 tradingMetrics.RecordOrderMatched();
             }
 
@@ -143,7 +143,7 @@ public class OrderMatchingWorker(
                         match.Side, match.Quantity, match.Symbol, currentPrice, executionPrice);
                 }
 
-                settlementQueue.Writer.TryWrite(new TradeSettlementCommand(match.Id, executionPrice));
+                settlementQueue.Write(new TradeSettlementCommand(match.Id, executionPrice, match.Symbol));
                 tradingMetrics.RecordOrderMatched();
             }
 
