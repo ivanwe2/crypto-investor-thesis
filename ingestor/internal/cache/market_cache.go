@@ -13,14 +13,30 @@ type MarketSnapshot struct {
 	Timestamp  int64   `json:"timestamp_utc"`
 }
 
+// OrderBookEntry is a single price level in the order book
+type OrderBookEntry struct {
+	Price float64
+	Size  float64
+}
+
+// OrderBookSnapshot is the cached L2 depth for a symbol
+type OrderBookSnapshot struct {
+	LastUpdateID int64
+	Bids         []OrderBookEntry
+	Asks         []OrderBookEntry
+	FetchedAt    time.Time
+}
+
 type MarketCache struct {
-	mu   sync.RWMutex
-	data map[string]*MarketSnapshot
+	mu         sync.RWMutex
+	data       map[string]*MarketSnapshot
+	orderBooks map[string]*OrderBookSnapshot
 }
 
 func NewMarketCache() *MarketCache {
 	return &MarketCache{
-		data: make(map[string]*MarketSnapshot),
+		data:       make(map[string]*MarketSnapshot),
+		orderBooks: make(map[string]*OrderBookSnapshot),
 	}
 }
 
@@ -59,4 +75,27 @@ func (c *MarketCache) GetAll() map[string]*MarketSnapshot {
 		copyMap[k] = v
 	}
 	return copyMap
+}
+
+// UpdateOrderBook stores a fresh order book snapshot for the given symbol.
+func (c *MarketCache) UpdateOrderBook(symbol string, lastUpdateID int64, bids, asks []OrderBookEntry) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.orderBooks[symbol] = &OrderBookSnapshot{
+		LastUpdateID: lastUpdateID,
+		Bids:         bids,
+		Asks:         asks,
+		FetchedAt:    time.Now(),
+	}
+}
+
+// GetOrderBook returns the cached order book if it exists and is younger than maxAge.
+func (c *MarketCache) GetOrderBook(symbol string, maxAge time.Duration) (*OrderBookSnapshot, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	snap, exists := c.orderBooks[symbol]
+	if !exists || time.Since(snap.FetchedAt) > maxAge {
+		return nil, false
+	}
+	return snap, true
 }

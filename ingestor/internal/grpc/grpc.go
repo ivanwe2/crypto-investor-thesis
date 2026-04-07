@@ -112,11 +112,41 @@ func (s *MarketDataServer) GetHistoricalKlines(ctx context.Context, req *pb.Klin
 }
 
 func (s *MarketDataServer) GetOrderBookDepth(ctx context.Context, req *pb.OrderBookRequest) (*pb.OrderBookResponse, error) {
+	const maxCacheAge = 5 * time.Second
+
+	// Serve from cache if the snapshot is fresh enough (avoids a Binance REST round-trip)
+	if snap, ok := s.cache.GetOrderBook(req.Symbol, maxCacheAge); ok {
+		response := &pb.OrderBookResponse{
+			Symbol:       req.Symbol,
+			LastUpdateId: snap.LastUpdateID,
+			Bids:         make([]*pb.OrderBookEntry, 0, len(snap.Bids)),
+			Asks:         make([]*pb.OrderBookEntry, 0, len(snap.Asks)),
+		}
+		for _, b := range snap.Bids {
+			response.Bids = append(response.Bids, &pb.OrderBookEntry{Price: b.Price, Size: b.Size})
+		}
+		for _, a := range snap.Asks {
+			response.Asks = append(response.Asks, &pb.OrderBookEntry{Price: a.Price, Size: a.Size})
+		}
+		return response, nil
+	}
+
+	// Cache miss: fetch from Binance REST, then populate cache for subsequent callers
 	depthData, err := exchange.FetchOrderBookDepth(ctx, req.Symbol, req.Limit)
 	if err != nil {
 		slog.Error("Failed to fetch order book depth", "symbol", req.Symbol, "error", err)
 		return nil, err
 	}
+
+	cacheBids := make([]cache.OrderBookEntry, len(depthData.Bids))
+	for i, b := range depthData.Bids {
+		cacheBids[i] = cache.OrderBookEntry{Price: b.Price, Size: b.Size}
+	}
+	cacheAsks := make([]cache.OrderBookEntry, len(depthData.Asks))
+	for i, a := range depthData.Asks {
+		cacheAsks[i] = cache.OrderBookEntry{Price: a.Price, Size: a.Size}
+	}
+	s.cache.UpdateOrderBook(req.Symbol, depthData.LastUpdateID, cacheBids, cacheAsks)
 
 	response := &pb.OrderBookResponse{
 		Symbol:       req.Symbol,
@@ -124,14 +154,12 @@ func (s *MarketDataServer) GetOrderBookDepth(ctx context.Context, req *pb.OrderB
 		Bids:         make([]*pb.OrderBookEntry, 0, len(depthData.Bids)),
 		Asks:         make([]*pb.OrderBookEntry, 0, len(depthData.Asks)),
 	}
-
 	for _, b := range depthData.Bids {
 		response.Bids = append(response.Bids, &pb.OrderBookEntry{Price: b.Price, Size: b.Size})
 	}
 	for _, a := range depthData.Asks {
 		response.Asks = append(response.Asks, &pb.OrderBookEntry{Price: a.Price, Size: a.Size})
 	}
-
 	return response, nil
 }
 

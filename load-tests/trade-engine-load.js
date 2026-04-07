@@ -138,11 +138,13 @@ export function insertLimitOrders(data) {
 }
 
 // ---------------------------------------------------------------------------
-// Scenario B — Consume Liquidity (MARKET BUY orders + Order Book reads)
+// Scenario B — Consume Liquidity (MARKET SELL orders + Order Book reads)
 //
-// Places MARKET BUY orders to force the TradeSettlementWorker to execute
-// ExecuteUpdateAsync() atomically in PostgreSQL. Immediately reads the order
-// book after each settlement to measure the Redis read latency.
+// Places MARKET SELL orders against the BUY-side liquidity (bids) built by
+// Scenario A. Each MARKET SELL matches immediately against the best bid,
+// forcing TradeSettlementWorker to execute ExecuteUpdateAsync() atomically
+// in PostgreSQL. Immediately reads the order book after each settlement.
+// Test users have 50 BTC, so they can sustain ~30 orders at 0.001–0.01 BTC.
 // ---------------------------------------------------------------------------
 export function insertMarketOrders(data) {
     const token   = data.tokens[(__VU - 1) % data.tokens.length];
@@ -153,7 +155,7 @@ export function insertMarketOrders(data) {
 
     const payload = JSON.stringify({
         symbol:   'BTCUSDT',
-        side:     1,  // OrderSide.Buy = 1
+        side:     2,  // OrderSide.Sell = 2  (consumes bids built by Scenario A)
         type:     1,  // OrderType.Market = 1
         quantity: quantity,
     });
