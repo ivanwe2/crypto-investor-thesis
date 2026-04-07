@@ -48,8 +48,12 @@ After:   gRPC request → cache hit  → respond (~3–10ms)
 - [ingestor/cmd/server/main.go](../../ingestor/cmd/server/main.go) — new background goroutine
 - [ingestor/internal/exchange/client.go](../../ingestor/internal/exchange/client.go) — `ActiveSymbols()` method on `SubscriptionManager`
 
-**Expected result:** `orderbook_fetch_latency_ms` p(95) drops from 291ms to < 20ms. The
-200ms threshold will be met. The median remains ~3–7ms (unchanged).
+**Measured result:** The background refresh reduced p(90) from 274ms to **11ms** (96%
+improvement), confirming the cache is warm for 90%+ of requests. The median dropped from
+7.6ms to 3.6ms. However, p(95) only improved from 291ms to 275ms — a residual ~5% of
+requests still reach Binance REST during the 0–3 second window between service start and the
+goroutine's first tick. Pre-warming the cache synchronously at startup (before the gRPC
+server begins accepting connections) would close this remaining gap entirely.
 
 ---
 
@@ -207,7 +211,7 @@ than an error state.
 
 | # | Change | Bottleneck addressed | Expected improvement |
 |---|---|---|---|
-| 1 | Background order book refresh | Lazy cache misses → 270ms Binance round-trip | orderbook p(95): 291ms → < 20ms |
+| 1 | Background order book refresh | Lazy cache misses → 270ms Binance round-trip | orderbook p(90): 274ms → 11ms (96% ↓); p(95): 291ms → 275ms (startup-window misses remain) |
 | 2 | DB indices on Status + Symbol | Full table scans on matching/settlement queries | Prevents O(n) scans at scale |
 | 3 | PostgreSQL tuning + pool alignment | Connection pool/DB cap mismatch, insufficient buffer cache | Eliminates hidden connection queuing |
 | 4 | Parallel settlement lanes | Single-threaded settlement serialising write locks | Up to 4× settlement throughput under multi-symbol load |
