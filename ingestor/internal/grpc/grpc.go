@@ -112,11 +112,58 @@ func (s *MarketDataServer) GetHistoricalKlines(ctx context.Context, req *pb.Klin
 }
 
 func (s *MarketDataServer) GetOrderBookDepth(ctx context.Context, req *pb.OrderBookRequest) (*pb.OrderBookResponse, error) {
+	const maxCacheAge = 5 * time.Second
+
+	// Serve from cache if the snapshot is fresh enough (avoids a Binance REST round-trip)
+	if snap, ok := s.cache.GetOrderBook(req.Symbol, maxCacheAge); ok {
+		response := &pb.OrderBookResponse{
+			Symbol:       req.Symbol,
+			LastUpdateId: snap.LastUpdateID,
+			Bids:         make([]*pb.OrderBookEntry, 0, len(snap.Bids)),
+			Asks:         make([]*pb.OrderBookEntry, 0, len(snap.Asks)),
+		}
+		for _, b := range snap.Bids {
+			response.Bids = append(response.Bids, &pb.OrderBookEntry{Price: b.Price, Size: b.Size})
+		}
+		for _, a := range snap.Asks {
+			response.Asks = append(response.Asks, &pb.OrderBookEntry{Price: a.Price, Size: a.Size})
+		}
+		return response, nil
+	}
+
+	// Cache miss: fetch from Binance REST, then populate cache for subsequent callers
 	depthData, err := exchange.FetchOrderBookDepth(ctx, req.Symbol, req.Limit)
 	if err != nil {
 		slog.Error("Failed to fetch order book depth", "symbol", req.Symbol, "error", err)
+		// Degrade gracefully: return a stale snapshot rather than propagating the error
+		if stale, ok := s.cache.GetOrderBookStale(req.Symbol); ok {
+			slog.Warn("Serving stale order book due to Binance REST error", "symbol", req.Symbol)
+			response := &pb.OrderBookResponse{
+				Symbol:       req.Symbol,
+				LastUpdateId: stale.LastUpdateID,
+				Bids:         make([]*pb.OrderBookEntry, 0, len(stale.Bids)),
+				Asks:         make([]*pb.OrderBookEntry, 0, len(stale.Asks)),
+			}
+			for _, b := range stale.Bids {
+				response.Bids = append(response.Bids, &pb.OrderBookEntry{Price: b.Price, Size: b.Size})
+			}
+			for _, a := range stale.Asks {
+				response.Asks = append(response.Asks, &pb.OrderBookEntry{Price: a.Price, Size: a.Size})
+			}
+			return response, nil
+		}
 		return nil, err
 	}
+
+	cacheBids := make([]cache.OrderBookEntry, len(depthData.Bids))
+	for i, b := range depthData.Bids {
+		cacheBids[i] = cache.OrderBookEntry{Price: b.Price, Size: b.Size}
+	}
+	cacheAsks := make([]cache.OrderBookEntry, len(depthData.Asks))
+	for i, a := range depthData.Asks {
+		cacheAsks[i] = cache.OrderBookEntry{Price: a.Price, Size: a.Size}
+	}
+	s.cache.UpdateOrderBook(req.Symbol, depthData.LastUpdateID, cacheBids, cacheAsks)
 
 	response := &pb.OrderBookResponse{
 		Symbol:       req.Symbol,
@@ -124,14 +171,12 @@ func (s *MarketDataServer) GetOrderBookDepth(ctx context.Context, req *pb.OrderB
 		Bids:         make([]*pb.OrderBookEntry, 0, len(depthData.Bids)),
 		Asks:         make([]*pb.OrderBookEntry, 0, len(depthData.Asks)),
 	}
-
 	for _, b := range depthData.Bids {
 		response.Bids = append(response.Bids, &pb.OrderBookEntry{Price: b.Price, Size: b.Size})
 	}
 	for _, a := range depthData.Asks {
 		response.Asks = append(response.Asks, &pb.OrderBookEntry{Price: a.Price, Size: a.Size})
 	}
-
 	return response, nil
 }
 

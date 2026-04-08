@@ -109,6 +109,37 @@ func main() {
 
 	grpcServer := grpc.StartServer(":50051", marketCache, metrics)
 
+	// Background order book refresh: proactively warms the cache every 3s for all subscribed
+	// symbols so that GetOrderBookDepth gRPC calls always hit the cache (eliminates ~270ms
+	// Binance REST round-trips from the hot request path).
+	go func() {
+		ticker := time.NewTicker(3 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-appCtx.Done():
+				return
+			case <-ticker.C:
+				for _, sym := range exchange.SubManager.ActiveSymbols() {
+					depthData, err := exchange.FetchOrderBookDepth(appCtx, sym, 20)
+					if err != nil {
+						slog.Warn("Background order book refresh failed", "symbol", sym, "error", err)
+						continue
+					}
+					bids := make([]cache.OrderBookEntry, len(depthData.Bids))
+					for i, b := range depthData.Bids {
+						bids[i] = cache.OrderBookEntry{Price: b.Price, Size: b.Size}
+					}
+					asks := make([]cache.OrderBookEntry, len(depthData.Asks))
+					for i, a := range depthData.Asks {
+						asks[i] = cache.OrderBookEntry{Price: a.Price, Size: a.Size}
+					}
+					marketCache.UpdateOrderBook(sym, depthData.LastUpdateID, bids, asks)
+				}
+			}
+		}
+	}()
+
 	httpServer := health.NewServer(cfg.HealthPort)
 	go func() {
 		slog.Info("Health check server listening", "port", cfg.HealthPort)
@@ -119,7 +150,7 @@ func main() {
 	}()
 
 	tradesChan := make(chan exchange.CombinedStreamEvent, 10000)
-	go exchange.Connect(appCtx, cfg.Symbols, tradesChan)
+	go exchange.Connect(appCtx, cfg.Symbols, tradesChan, metrics.MessagesDropped)
 
 	stopChan := make(chan os.Signal, 1)
 	signal.Notify(stopChan, os.Interrupt, syscall.SIGTERM)

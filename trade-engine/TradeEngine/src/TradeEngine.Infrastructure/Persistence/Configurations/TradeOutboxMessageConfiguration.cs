@@ -23,6 +23,8 @@ public class TradeOutboxMessageConfiguration : IEntityTypeConfiguration<TradeOut
         builder.Property(m => m.OccurredOnUtc)
             .IsRequired();
 
+        builder.Property(m => m.RetryCount).HasDefaultValue(0);
+
         builder.HasIndex(m => new { m.ProcessedOnUtc, m.OccurredOnUtc });
     }
 }

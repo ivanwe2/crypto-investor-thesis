@@ -13,6 +13,8 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
         builder.HasKey(x => x.Id);
 
         builder.HasIndex(x => x.UserId);
+        builder.HasIndex(x => x.Status);
+        builder.HasIndex(x => new { x.Symbol, x.Status });
 
         builder.Property(x => x.Symbol)
                .HasMaxLength(20)
