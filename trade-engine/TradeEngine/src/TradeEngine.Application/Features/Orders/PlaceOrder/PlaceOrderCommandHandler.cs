@@ -1,6 +1,7 @@
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using System.Diagnostics.Metrics;
 using TradeEngine.Application.DTOs.Order;
 using TradeEngine.Application.DTOs.Wallet;
 using TradeEngine.Application.Interfaces;
@@ -13,50 +14,76 @@ public class PlaceOrderCommandHandler(
     ITradeEngineDbContext dbContext,
     IOrderIngressQueue ingressQueue,
     IRedisReadModelService redisService,
+    IMeterFactory meterFactory,
     ILogger<PlaceOrderCommandHandler> logger) : IRequestHandler<PlaceOrderCommand, Result<OrderResponse>>
 {
+    private readonly Counter<long> _ordersRejected = meterFactory
+        .Create("TradeEngine.Trading")
+        .CreateCounter<long>("trade_engine.orders_rejected", description: "Orders rejected at placement by reason");
+
+    private const int MaxConcurrencyRetries = 3;
+
     public async Task<Result<OrderResponse>> Handle(PlaceOrderCommand request, CancellationToken cancellationToken)
     {
-        var wallet = await dbContext.Wallets
-            .Include(w => w.Balances)
-            .SingleOrDefaultAsync(w => w.UserId == request.UserId, cancellationToken);
-
-        if (wallet == null)
-            return Result.Failure<OrderResponse>(new Error("Wallet.NotFound", "User wallet not found"));
-
         var symbol = request.Symbol.ToUpper();
-        string quoteCurrency = symbol.EndsWith("USDT") ? "USDT" : "USD"; 
+        string quoteCurrency = symbol.EndsWith("USDT") ? "USDT" : "USD";
         string baseCurrency = symbol.Replace(quoteCurrency, "");
-        
-        Result walletResult;
-        
-        if (request.Side == OrderSide.Buy)
+
+        if (request.Side == OrderSide.Buy && request.TargetPrice <= 0)
+            return Result.Failure<OrderResponse>(new Error("Order.InvalidPrice", "A reference target price must be provided to lock collateral."));
+
+        Order? order = null;
+        Wallet? wallet = null;
+
+        for (int attempt = 1; attempt <= MaxConcurrencyRetries; attempt++)
         {
-            if (request.TargetPrice <= 0)
-                return Result.Failure<OrderResponse>(new Error("Order.InvalidPrice", "A reference target price must be provided to lock collateral."));
+            wallet = await dbContext.Wallets
+                .Include(w => w.Balances)
+                .SingleOrDefaultAsync(w => w.UserId == request.UserId, cancellationToken);
 
-            decimal totalCost = request.Quantity * request.TargetPrice;
-            walletResult = wallet.Withdraw(quoteCurrency, totalCost);
+            if (wallet == null)
+                return Result.Failure<OrderResponse>(new Error("Wallet.NotFound", "User wallet not found"));
+
+            Result walletResult = request.Side == OrderSide.Buy
+                ? wallet.Withdraw(quoteCurrency, request.Quantity * request.TargetPrice)
+                : wallet.Withdraw(baseCurrency, request.Quantity);
+
+            if (walletResult.IsFailure)
+            {
+                _ordersRejected.Add(1, new KeyValuePair<string, object?>("rejection_reason", "insufficient_balance"));
+                return Result.Failure<OrderResponse>(walletResult.Error);
+            }
+
+            var orderResult = Order.Create(request.UserId, symbol, request.Side, request.Type, request.Quantity, request.TargetPrice, request.StopPrice);
+            if (orderResult.IsFailure)
+                return Result.Failure<OrderResponse>(orderResult.Error);
+
+            order = orderResult.Value;
+            dbContext.Orders.Add(order);
+
+            try
+            {
+                await dbContext.SaveChangesAsync(cancellationToken);
+                break;
+            }
+            catch (DbUpdateConcurrencyException) when (attempt < MaxConcurrencyRetries)
+            {
+                logger.LogWarning("Wallet concurrency conflict on order placement (attempt {Attempt}/{Max}), retrying.", attempt, MaxConcurrencyRetries);
+                dbContext.Orders.Remove(order);
+                order = null;
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                logger.LogError("Wallet concurrency conflict exhausted retries for user {UserId}.", request.UserId);
+                return Result.Failure<OrderResponse>(new Error("Order.ConcurrencyConflict", "Concurrent modification detected, please retry."));
+            }
         }
-        else
-        {
-            walletResult = wallet.Withdraw(baseCurrency, request.Quantity);
-        }
 
-        if (walletResult.IsFailure)
-            return Result.Failure<OrderResponse>(walletResult.Error);
+        // order and wallet are guaranteed non-null here — all failure paths return early above
+        if (order is null || wallet is null)
+            return Result.Failure<OrderResponse>(new Error("Order.UnexpectedError", "Failed to place order."));
 
-        var orderResult = Order.Create(request.UserId, symbol, request.Side, request.Type, request.Quantity, request.TargetPrice, request.StopPrice);
-        
-        if (orderResult.IsFailure)
-            return Result.Failure<OrderResponse>(orderResult.Error);
-
-        var order = orderResult.Value;
-        dbContext.Orders.Add(order);
-
-        await dbContext.SaveChangesAsync(cancellationToken);
-
-        try 
+        try
         {
             var orderDto = new OpenOrderDto(
                 order.Id,

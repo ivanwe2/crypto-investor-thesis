@@ -32,7 +32,8 @@ public class AuthService(TradeEngineDbContext dbContext, IConfiguration configur
         var user = userResult.Value;
 
         var wallet = new Wallet(user.Id);
-        wallet.Deposit("USDT", 10_000m);
+        wallet.Deposit("USDT", 100_000m);
+        wallet.Deposit("BTC", 50m);
 
         dbContext.Users.Add(user);
         dbContext.Wallets.Add(wallet);

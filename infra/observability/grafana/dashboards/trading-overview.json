@@ -99,7 +99,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(redis_cache_hits_total[5m])) / (sum(rate(redis_cache_hits_total[5m])) + sum(rate(redis_cache_misses_total[5m])))",
+          "expr": "sum(rate(redis_cache_hits_total[5m])) / clamp_min(sum(rate(redis_cache_hits_total[5m])) + sum(rate(redis_cache_misses_total[5m])), 1)",
           "legendFormat": "hit ratio",
           "refId": "A"
         }
@@ -198,6 +198,11 @@
           "expr": "histogram_quantile(0.95, sum(rate(ai_analyst_inference_duration_ms_bucket[5m])) by (le))",
           "legendFormat": "P95",
           "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(ai_analyst_inference_duration_ms_bucket[5m])) by (le))",
+          "legendFormat": "P99",
+          "refId": "C"
         }
       ]
     },
@@ -214,6 +219,102 @@
         {
           "expr": "ingestor_active_subscriptions",
           "legendFormat": "subscriptions",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Ingestor Messages Dropped Rate",
+      "description": "Binance trade events dropped due to full internal channel buffer — any sustained non-zero value indicates backpressure",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "ops", "color": { "mode": "fixed", "fixedColor": "red" } },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(ingestor_messages_dropped_total[5m])) by (symbol)",
+          "legendFormat": "{{ symbol }}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Ingestor WebSocket Reconnections (1h)",
+      "description": "Cumulative Binance WebSocket reconnections in the last hour — high values indicate network instability",
+      "type": "stat",
+      "gridPos": { "h": 8, "w": 6, "x": 12, "y": 32 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 3 }, { "color": "red", "value": 10 }] }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "increase(ingestor_websocket_reconnections_total[1h])",
+          "legendFormat": "reconnections",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Order Rejection Rate (by reason)",
+      "description": "Orders rejected at placement — insufficient_balance shows funding pressure",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 18, "y": 32 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "ops" },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(trade_engine_orders_rejected_total[5m])) by (rejection_reason)",
+          "legendFormat": "{{ rejection_reason }}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "AI Analyses Performed Rate",
+      "description": "FinBERT analyses per second — should track closely with ingestor trade ingestion rate",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 40 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "ops" },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "rate(ai_analyst_analyses_performed_total[5m])",
+          "legendFormat": "analyses/s",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Outbox Dead Letters",
+      "description": "Outbox messages that exceeded max retries (5) and are no longer being retried — requires manual investigation",
+      "type": "stat",
+      "gridPos": { "h": 8, "w": 6, "x": 12, "y": 40 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 5 }] }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "increase(trade_engine_outbox_dead_letters_total[1h])",
+          "legendFormat": "dead letters",
           "refId": "A"
         }
       ]

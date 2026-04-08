@@ -1,0 +1,1 @@
+- [Documentation file locations and naming conventions](project_doc_locations.md) — docs/ for architecture, docs/changes/YYYY-MM-DD-slug.md for session change logs
