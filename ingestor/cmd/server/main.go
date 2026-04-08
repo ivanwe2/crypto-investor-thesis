@@ -150,7 +150,7 @@ func main() {
 	}()
 
 	tradesChan := make(chan exchange.CombinedStreamEvent, 10000)
-	go exchange.Connect(appCtx, cfg.Symbols, tradesChan)
+	go exchange.Connect(appCtx, cfg.Symbols, tradesChan, metrics.MessagesDropped)
 
 	stopChan := make(chan os.Signal, 1)
 	signal.Notify(stopChan, os.Interrupt, syscall.SIGTERM)

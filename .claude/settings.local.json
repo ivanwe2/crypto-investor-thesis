@@ -11,7 +11,10 @@
       "Bash(go build:*)",
       "Bash(go vet:*)",
       "Bash(dotnet build:*)",
-      "Bash(make migrate:*)"
+      "Bash(make migrate:*)",
+      "Bash(find /d/diplomna-bachelor/crypto-investor-thesis/ingestor -type f -name \"*.go\" -exec grep -l \"TradesIngested\\\\|ActiveSubscriptions\\\\|WebSocketReconnections\" {} \\\\;)",
+      "Bash(find /d/diplomna-bachelor/crypto-investor-thesis/ingestor -type f -name \"*.go\" -exec grep -l \"TradesIngested\\\\|Add\\\\\\(\" {} \\\\;)",
+      "Bash(find /d/diplomna-bachelor/crypto-investor-thesis/ingestor -type f -name \"*.go\" -exec grep -l \"TradesIngested\" {} \\\\;)"
     ]
   }
 }

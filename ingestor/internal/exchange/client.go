@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 )
 
 const baseURL = "wss://stream.binance.com:9443/stream?streams="
@@ -80,7 +82,7 @@ func (sm *SubscriptionManager) PreWarm(symbols []string) {
 	}
 }
 
-func Connect(ctx context.Context, symbols []string, dataChan chan<- CombinedStreamEvent) {
+func Connect(ctx context.Context, symbols []string, dataChan chan<- CombinedStreamEvent, dropped metric.Int64Counter) {
 	streamParams := make([]string, len(symbols))
 	for i, s := range symbols {
 		streamParams[i] = fmt.Sprintf("%s@trade", strings.ToLower(s))
@@ -162,7 +164,8 @@ func Connect(ctx context.Context, symbols []string, dataChan chan<- CombinedStre
 		select {
 		case dataChan <- event:
 		default:
-			slog.Warn("Channel full, dropping message")
+			dropped.Add(ctx, 1, metric.WithAttributes(attribute.String("symbol", event.Data.Symbol)))
+			slog.Warn("Channel full, dropping message", "symbol", event.Data.Symbol)
 		}
 	}
 }

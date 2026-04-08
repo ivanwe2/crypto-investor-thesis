@@ -10,6 +10,7 @@ type IngestorMetrics struct {
 	TradesIngested         metric.Int64Counter
 	WebSocketReconnections metric.Int64Counter
 	ActiveSubscriptions    metric.Int64UpDownCounter
+	MessagesDropped        metric.Int64Counter
 }
 
 func NewMetrics(mp *sdkmetric.MeterProvider) (*IngestorMetrics, error) {
@@ -33,9 +34,16 @@ func NewMetrics(mp *sdkmetric.MeterProvider) (*IngestorMetrics, error) {
 		return nil, err
 	}
 
+	dropped, err := meter.Int64Counter("ingestor.messages_dropped",
+		metric.WithDescription("Binance trade messages dropped due to full channel buffer"))
+	if err != nil {
+		return nil, err
+	}
+
 	return &IngestorMetrics{
 		TradesIngested:         trades,
 		WebSocketReconnections: reconnections,
 		ActiveSubscriptions:    subscriptions,
+		MessagesDropped:        dropped,
 	}, nil
 }

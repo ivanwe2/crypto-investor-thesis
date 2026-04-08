@@ -49,14 +49,16 @@ public class OutboxProcessorWorker(
         }
     }
 
+    private const int MaxRetryCount = 5;
+
     private async Task ProcessOutboxMessagesAsync(CancellationToken stoppingToken)
     {
         using var scope = serviceProvider.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<ITradeEngineDbContext>();
 
-        // Fetch up to 50 pending messages at a time
+        // Skip messages that have exceeded the retry limit
         var messages = await dbContext.TradeOutboxMessages
-            .Where(m => !m.ProcessedOnUtc.HasValue)
+            .Where(m => !m.ProcessedOnUtc.HasValue && m.RetryCount < MaxRetryCount)
             .OrderBy(m => m.OccurredOnUtc)
             .Take(50)
             .ToListAsync(stoppingToken);
@@ -65,11 +67,30 @@ public class OutboxProcessorWorker(
 
         foreach (var message in messages)
         {
-            await messagePublisher.PublishAsync(message.Type, message.Content, stoppingToken);
+            try
+            {
+                await messagePublisher.PublishAsync(message.Type, message.Content, stoppingToken);
+                message.ProcessedOnUtc = DateTime.UtcNow;
+                message.Error = null;
+                tradingMetrics.RecordOutboxPublished();
+                logger.LogDebug("Processed outbox message {MessageId}", message.Id);
+            }
+            catch (Exception ex)
+            {
+                message.RetryCount++;
+                message.FailedAt = DateTime.UtcNow;
+                message.Error = ex.Message;
 
-            message.ProcessedOnUtc = DateTime.UtcNow;
-            tradingMetrics.RecordOutboxPublished();
-            logger.LogDebug("Processed outbox message {MessageId}", message.Id);
+                if (message.RetryCount >= MaxRetryCount)
+                {
+                    tradingMetrics.RecordOutboxDeadLetter();
+                    logger.LogError(ex, "Outbox message {MessageId} exceeded max retries ({Max}). Moving to dead-letter state.", message.Id, MaxRetryCount);
+                }
+                else
+                {
+                    logger.LogWarning(ex, "Outbox message {MessageId} failed (attempt {Attempt}/{Max}).", message.Id, message.RetryCount, MaxRetryCount);
+                }
+            }
         }
 
         await dbContext.SaveChangesAsync(stoppingToken);
