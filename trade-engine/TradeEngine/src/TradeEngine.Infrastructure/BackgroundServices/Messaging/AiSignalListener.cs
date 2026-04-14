@@ -99,18 +99,26 @@ public class AiSignalListener(
                 };
 
                 await _channel.BasicConsumeAsync("trade_engine_ai_queue", autoAck: true, consumer: consumer, cancellationToken: stoppingToken);
-                break; // Exit retry loop
+
+                // Wait here until the connection drops or shutdown is requested
+                var connectionClosed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                _connection.ConnectionShutdownAsync += (_, _) => { connectionClosed.TrySetResult(); return Task.CompletedTask; };
+                await Task.WhenAny(connectionClosed.Task, Task.Delay(Timeout.Infinite, stoppingToken));
+
+                if (stoppingToken.IsCancellationRequested) return;
+
+                logger.LogWarning("AI Signal Listener lost RabbitMQ connection. Reconnecting...");
             }
             catch (Exception ex)
             {
                 logger.LogWarning("AI Listener RabbitMQ retry in 5s... {Message}", ex.Message);
-                await Task.Delay(5000, stoppingToken);
+                try { await Task.Delay(5000, stoppingToken); } catch (OperationCanceledException) { return; }
             }
-        }
-
-        while (!stoppingToken.IsCancellationRequested)
-        {
-            await Task.Delay(1000, stoppingToken);
+            finally
+            {
+                if (_channel is not null) { await _channel.DisposeAsync(); _channel = null; }
+                if (_connection is not null) { await _connection.DisposeAsync(); _connection = null; }
+            }
         }
     }
 

@@ -107,30 +107,37 @@ public class RabbitMqListener(
                 };
 
                 await _channel.BasicConsumeAsync(
-                    queue: RabbitMqConstants.QueueName, 
-                    autoAck: true, 
+                    queue: RabbitMqConstants.QueueName,
+                    autoAck: true,
                     consumer: consumer,
                     cancellationToken: stoppingToken);
 
-                break;
+                // Wait here until the connection drops or shutdown is requested
+                var connectionClosed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                _connection.ConnectionShutdownAsync += (_, _) => { connectionClosed.TrySetResult(); return Task.CompletedTask; };
+                await Task.WhenAny(connectionClosed.Task, Task.Delay(Timeout.Infinite, stoppingToken));
+
+                if (stoppingToken.IsCancellationRequested) return;
+
+                logger.LogWarning("RabbitMQ Listener lost connection. Reconnecting...");
             }
             catch (Exception ex)
             {
                 logger.LogWarning("RabbitMQ not reachable yet. Retrying in 3s... Error: {Message}", ex.Message);
-                try 
+                try
                 {
                     await Task.Delay(3000, stoppingToken);
-                } 
-                catch (OperationCanceledException) 
+                }
+                catch (OperationCanceledException)
                 {
                     return;
                 }
             }
-        }
-
-        while (!stoppingToken.IsCancellationRequested)
-        {
-            await Task.Delay(1000, stoppingToken);
+            finally
+            {
+                if (_channel is not null) { _channel.Dispose(); _channel = null; }
+                if (_connection is not null) { _connection.Dispose(); _connection = null; }
+            }
         }
     }
 

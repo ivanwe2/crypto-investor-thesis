@@ -33,8 +33,11 @@ public class RabbitMqPublisher : IMessagePublisher, IAsyncDisposable
 
     private async Task EnsureConnectionAsync(CancellationToken cancellationToken)
     {
-        if (_connection == null || _channel == null)
+        if (_connection is not { IsOpen: true } || _channel is not { IsOpen: true })
         {
+            if (_channel is not null) await _channel.DisposeAsync();
+            if (_connection is not null) await _connection.DisposeAsync();
+
             _connection = await _factory.CreateConnectionAsync(cancellationToken);
             _channel = await _connection.CreateChannelAsync(cancellationToken: cancellationToken);
 
