@@ -14,7 +14,9 @@
       "Bash(make migrate:*)",
       "Bash(find /d/diplomna-bachelor/crypto-investor-thesis/ingestor -type f -name \"*.go\" -exec grep -l \"TradesIngested\\\\|ActiveSubscriptions\\\\|WebSocketReconnections\" {} \\\\;)",
       "Bash(find /d/diplomna-bachelor/crypto-investor-thesis/ingestor -type f -name \"*.go\" -exec grep -l \"TradesIngested\\\\|Add\\\\\\(\" {} \\\\;)",
-      "Bash(find /d/diplomna-bachelor/crypto-investor-thesis/ingestor -type f -name \"*.go\" -exec grep -l \"TradesIngested\" {} \\\\;)"
+      "Bash(find /d/diplomna-bachelor/crypto-investor-thesis/ingestor -type f -name \"*.go\" -exec grep -l \"TradesIngested\" {} \\\\;)",
+      "Bash(grep -E \"\\\\.cs$\")",
+      "Bash(find /d/diplomna-bachelor/crypto-investor-thesis -name \"go.mod\" -exec head -20 {} \\\\;)"
     ]
   }
 }

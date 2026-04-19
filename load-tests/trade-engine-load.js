@@ -61,9 +61,9 @@ const NUM_TEST_USERS = 100;
 // 400 "Username taken" which we ignore) then logs each one in to get a fresh JWT.
 // Returns an array of tokens indexed 0..N-1.
 //
-// Each registered user receives 10,000 USDT from AuthService.RegisterAsync.
+// Each registered user receives 100,000 USDT and 50 BTC from AuthService.RegisterAsync.
 // Orders use tiny BTC quantities so wallets are not exhausted mid-test:
-//   0.0001–0.001 BTC × $50,000 = $5–$50 per order → 200–2,000 orders before dry.
+//   0.0001–0.001 BTC × $50,000 = $5–$50 per order → 2,000–20,000 orders before dry.
 // ---------------------------------------------------------------------------
 export function setup() {
     const tokens = [];
